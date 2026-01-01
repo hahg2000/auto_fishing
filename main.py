@@ -43,6 +43,7 @@ roi_pos = {
     'height': int(region['height'] * (0.89 - 0.86))
 }
 
+# 如果屏幕色彩不同识别不出，可以改这里
 lower_white = np.array([0, 0, 240]) 
 upper_white = np.array([180, 50, 255])
 lower_yellow = np.array([20, 100, 100])
@@ -53,26 +54,35 @@ def wait_for_bite(sct):
     if not region: return
     wait_start_time = time.time()
     wait_end_time = time.time()
+    fail_num = 0
 
     while True:
         hook_img = np.array(sct.grab(hook_pos))
 
-        # hook_img = img[int(height*0.28):int(height*0.39), int(width*0.47): int(width*0.53)]
         hook_img_gray = cv2.cvtColor(hook_img, cv2.COLOR_BGR2GRAY)
  
         res = cv2.matchTemplate(hook_img_gray, template, cv2.TM_CCOEFF_NORMED)
-        # 73%的匹配度，可适当减少
+        # 71%的匹配度，可适当减少
         loc = np.where(res >= 0.71)
         if len(loc[0]) > 0: 
             print("鱼上钩了！") 
             # 收杆，进入QTE
             pydirectinput.press('space')
             return
-        
-        wait_end_time = time.time()
 
-        # 如果等待时间超过10秒，代表可能有突发情况
-        if (wait_end_time - wait_start_time > 10):
+        if fail_num > 3:
+            print("背包满了")
+            fail_num = 0
+            clear_backpack()
+            pydirectinput.press('space')
+            continue
+
+        wait_end_time = time.time()
+        # 如果等待时间超过13秒，代表可能有突发情况
+        if wait_end_time - wait_start_time > 13:
+            print("突发情况")
+            fail_num += 1
+
             wait_start_time = wait_end_time
             # 处理切换时间
             pydirectinput.keyDown('up')  
@@ -86,7 +96,8 @@ def wait_for_bite(sct):
             pydirectinput.press('space')
             continue
         
-        # cv2.imshow("test", hook_img)
+        # 取消注释来测试感叹号是否在框里
+        # cv2.imshow("hook_img_gray", hook_img_gray)
         # if cv2.waitKey(1) & 0xFF == ord('q'):
         #   break 
  
@@ -126,15 +137,17 @@ def play_qte(sct):
                 # 边界处理，向前向后5个像素都还是完美区域
                 is_middle_left = mask_yellow[roi.shape[0]//2, cursor_x + 5] == 255
                 is_middle_right = mask_yellow[roi.shape[0]//2, cursor_x - 5] == 255
-                is_top_left = mask_yellow[roi.shape[0]//4, cursor_x + 5] == 255
-                is_bottom_left = mask_yellow[roi.shape[0]*3//4, cursor_x + 5] == 255
-                if is_middle_left or is_middle_right or is_top_left or is_bottom_left:
+                is_top_left = mask_yellow[roi.shape[0]//5, cursor_x + 5] == 255
+                is_top_right = mask_yellow[roi.shape[0]//5, cursor_x - 5] == 255
+                is_bottom_left = mask_yellow[roi.shape[0]*4//5, cursor_x + 5] == 255
+                is_bottom_right = mask_yellow[roi.shape[0]*4//5, cursor_x - 5] == 255
+                if is_middle_left or is_middle_right or is_top_left or is_top_right or is_bottom_left or is_bottom_right:
+                    print(is_middle_left, is_bottom_left, is_top_left)
                     pydirectinput.press('space')
-                    time.sleep(0.1)  
         else:
             no_bar_frames += 1
 
-            if no_bar_frames > 50:
+            if no_bar_frames > 120:
                 print("钓鱼结束")
                 time.sleep(3.5)
                 finish_fishing(region["left"] + region["width"]//2, region["top"] + region["height"]//2)
@@ -151,9 +164,36 @@ def finish_fishing(window_center_x, window_center_y):
 def cast_rod():
     print(">>> 动作：蓄力抛竿...")
     pydirectinput.keyDown('space')  # 按下不放
-    time.sleep(0.4)                 # 持续 0.4 秒
+    time.sleep(0.38)                 # 持续 0.4 秒
     pydirectinput.keyUp('space')    # 松开
     print(">>> 动作：抛竿完成")
+
+def clear_backpack():
+    # 打开背包
+    pydirectinput.press('t')
+
+    # 点击一键出售
+    time.sleep(1)
+    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.87), int(region["top"] + region["height"] * 0.92))
+    pydirectinput.click()
+
+    # 点击全选
+    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.82), int(region["top"] + region["height"] * 0.92))
+    pydirectinput.click()
+
+    # 点击打钩按钮
+    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.92), int(region["top"] + region["height"] * 0.92))
+    pydirectinput.click()
+
+    # 点击确认按钮
+    time.sleep(0.5)
+    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.57), int(region["top"] + region["height"] * 0.61))
+    pydirectinput.click()
+
+    # 退出背包
+    time.sleep(0.5)
+    pydirectinput.press('esc')
+    time.sleep(0.5)
 
 def main():
     time.sleep(3)

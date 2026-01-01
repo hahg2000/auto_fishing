@@ -35,7 +35,7 @@ pip install -r requirements.txt
 
 ### 4. 运行脚本
 
-运行脚本后，点击一下游戏里
+运行脚本后，点击一下游戏里，注意游戏界面要全部展示出来，无其他窗口遮挡
 
 ```sh
 python main.py

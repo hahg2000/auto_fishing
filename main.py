@@ -117,8 +117,8 @@ def play_qte(sct):
         
         # 提取黄色区域
         mask_yellow = cv2.inRange(roi_hsv, lower_yellow, upper_yellow)
-        # 5x5 的卷积核
-        kernel = np.ones((5, 5), np.uint8) 
+        # 7x7 的卷积核
+        kernel = np.ones((7, 7), np.uint8) 
         mask_yellow = cv2.dilate(mask_yellow, kernel, iterations=2) 
 
         pixel_count = cv2.countNonZero(mask_yellow) * 25 
@@ -126,23 +126,16 @@ def play_qte(sct):
         # 防止有其他有元素干扰
         if pixel_count > 8000:  
             no_bar_frames = 0
-            gray = cv2.cvtColor(roi, cv2.COLOR_BGRA2GRAY)
             # 找到光标位置
-            _, mask_cursor = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY)
+            mask_cursor = cv2.inRange(roi_hsv, lower_white, upper_white)
             col_sums = np.sum(mask_cursor, axis=0)
             # 找到白色像素最多的那一列的索引
             cursor_x = np.argmax(col_sums) 
             #  如果画面里没有白色，cursor_x 可能是 0，需要防呆
-            if np.max(col_sums) != 0:
+            if np.max(col_sums) != 0: 
                 # 边界处理，向前向后5个像素都还是完美区域
-                is_middle_left = mask_yellow[roi.shape[0]//2, cursor_x + 5] == 255
-                is_middle_right = mask_yellow[roi.shape[0]//2, cursor_x - 5] == 255
-                is_top_left = mask_yellow[roi.shape[0]//5, cursor_x + 5] == 255
-                is_top_right = mask_yellow[roi.shape[0]//5, cursor_x - 5] == 255
-                is_bottom_left = mask_yellow[roi.shape[0]*4//5, cursor_x + 5] == 255
-                is_bottom_right = mask_yellow[roi.shape[0]*4//5, cursor_x - 5] == 255
-                if is_middle_left or is_middle_right or is_top_left or is_top_right or is_bottom_left or is_bottom_right:
-                    print(is_middle_left, is_bottom_left, is_top_left)
+                check_y = roi.shape[0] // 2
+                if mask_yellow[check_y, cursor_x]:
                     pydirectinput.press('space')
         else:
             no_bar_frames += 1
@@ -192,7 +185,8 @@ def clear_backpack():
 
     # 退出背包
     time.sleep(0.5)
-    pydirectinput.press('esc')
+    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.1), int(region["top"] + region["height"] * 0.12))
+    pydirectinput.click()
     time.sleep(0.5)
 
 def main():

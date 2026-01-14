@@ -1,1 +1,3 @@
-auto_fishing*
+auto_fishing/
+dist/
+build/

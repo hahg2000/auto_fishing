@@ -3,44 +3,49 @@ import mss
 import numpy as np
 import pydirectinput
 import time
-import win32gui
 import ctypes
+import utils
 ctypes.windll.user32.SetProcessDPIAware()
 GAME_TITLE = "BrownDust II" 
 
-def get_window_region(window_title):
-    """
-    根据窗口标题找到窗口的 (left, top, width, height)
-    """
-    hwnd = win32gui.FindWindow(None, window_title)
-    if not hwnd:
-        print(f"错误: 未找到标题为 '{window_title}' 的窗口")
-        return None
-    
-    # 获取窗口在屏幕上的坐标 (left, top, right, bottom)
-    rect = win32gui.GetWindowRect(hwnd)
-    x, y, right, bottom = rect
-    w = right - x
-    h = bottom - y
-    
-    # 返回 mss 需要的字典格式
-    return {'left': x, 'top': y, 'width': w, 'height': h}
+# 加载感叹号模板
+# template = cv2.imread('exclamation_mark.png', cv2.IMREAD_GRAYSCALE)
+image_path = utils.get_resource_path('exclamation_mark.png')
+template = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+region = utils.get_window_region(GAME_TITLE)
+config = utils.read_ini()
 
-template = cv2.imread('exclamation_mark.png', cv2.IMREAD_GRAYSCALE) # 加载感叹号模板
-region = get_window_region(GAME_TITLE)
+roi_top_percent = int(config['roi']['top_percent'])
+roi_bottom_percent = int(config['roi']['bottom_percent'])
+roi_left_percent = int(config['roi']['left_percent'])
+roi_right_percent = int(config['roi']['right_percent'])
 
+hook_top_percent = int(config['hook']['top_percent'])
+hook_bottom_percent = int(config['hook']['bottom_percent'])
+hook_left_percent = int(config['hook']['left_percent'])
+hook_right_percent = int(config['hook']['right_percent'])
+
+lower_yellow_hue = int(config['roi']['lower_yellow_hue'])
+lower_yellow_saturation = int(config['roi']['lower_yellow_saturation'])
+lower_yellow_value = int(config['roi']['lower_yellow_value'])
+upper_yellow_hue = int(config['roi']['upper_yellow_hue'])
+upper_yellow_saturation = int(config['roi']['upper_yellow_saturation'])
+upper_yellow_value = int(config['roi']['upper_yellow_value'])
+lower_yellow = np.array([lower_yellow_hue, lower_yellow_saturation, lower_yellow_value])
+upper_yellow = np.array([upper_yellow_hue, upper_yellow_saturation, upper_yellow_value])
+            
 hook_pos = {
-    'left': region['left'] + int(region['width'] * 0.47),
-    'top': region['top'] + int(region['height'] * 0.28),
-    'width': int(region['width'] * (0.53 - 0.47)),
-    'height': int(region['height'] * (0.39 - 0.28))
+    'left': region['left'] + int(region['width'] * hook_left_percent / 100),
+    'top': region['top'] + int(region['height'] * hook_top_percent / 100),
+    'width': int(region['width'] * (hook_right_percent - hook_left_percent) / 100),
+    'height': int(region['height'] * (hook_bottom_percent - hook_top_percent) / 100)
 }
 
 roi_pos = {
-    'left': region['left'] + int(region['width'] * 0.37),
-    'top': region['top'] + int(region['height'] * 0.86),
-    'width': int(region['width'] * (0.65 - 0.37)),
-    'height': int(region['height'] * (0.89 - 0.86))
+    'left': region['left'] + int(region['width'] * roi_left_percent / 100),
+    'top': region['top'] + int(region['height'] * roi_top_percent / 100),
+    'width': int(region['width'] * (roi_right_percent - roi_left_percent) / 100),
+    'height': int(region['height'] * (roi_bottom_percent - roi_top_percent) / 100)
 }
 
 # 如果屏幕色彩不同识别不出，可以改这里
@@ -50,7 +55,7 @@ lower_yellow = np.array([20, 100, 100])
 upper_yellow = np.array([40, 255, 255]) 
 
 def wait_for_bite(sct):
-    print("等待鱼上钩...")
+    print(">>> 等待鱼上钩")
     if not region: return
     wait_start_time = time.time()
     wait_end_time = time.time()
@@ -62,25 +67,25 @@ def wait_for_bite(sct):
         hook_img_gray = cv2.cvtColor(hook_img, cv2.COLOR_BGR2GRAY)
  
         res = cv2.matchTemplate(hook_img_gray, template, cv2.TM_CCOEFF_NORMED)
-        # 71%的匹配度，可适当减少
-        loc = np.where(res >= 0.71)
+        # 60%的匹配度，可适当减少
+        loc = np.where(res >= 0.60)
         if len(loc[0]) > 0: 
-            print("鱼上钩了！") 
+            print(">>> 鱼上钩了！") 
             # 收杆，进入QTE
             pydirectinput.press('space')
             return
 
         if fail_num > 3:
-            print("背包满了")
+            print(">>> 背包满了")
             fail_num = 0
             clear_backpack()
-            pydirectinput.press('space')
+            cast_rod()
             continue
 
         wait_end_time = time.time()
-        # 如果等待时间超过13秒，代表可能有突发情况
-        if wait_end_time - wait_start_time > 13:
-            print("突发情况")
+        # 如果等待时间超过10秒，代表可能有突发情况
+        if wait_end_time - wait_start_time > 10:
+            print(">>> 突发情况")
             fail_num += 1
 
             wait_start_time = wait_end_time
@@ -93,16 +98,11 @@ def wait_for_bite(sct):
             finish_fishing(region["left"] + region["width"]//2, region["top"] + region["height"]//2)
 
             # 重新抛杆
-            pydirectinput.press('space')
+            cast_rod()
             continue
-        
-        # 取消注释来测试感叹号是否在框里
-        # cv2.imshow("hook_img_gray", hook_img_gray)
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #   break 
  
 def play_qte(sct):
-    print("开始 QTE 战斗...")
+    print(">>> 开始 QTE...")
 
     no_bar_frames = 0
     start_time = time.time()
@@ -136,18 +136,18 @@ def play_qte(sct):
                 # 边界处理，向前向后5个像素都还是完美区域
                 check_y = roi.shape[0] // 2
                 if mask_yellow[check_y, cursor_x]:
+                    print(">>> 击中了黄色区域")
                     pydirectinput.press('space')
         else:
             no_bar_frames += 1
 
-            if no_bar_frames > 120:
-                print("钓鱼结束")
+            if no_bar_frames > 130:
+                print(">>> 钓鱼结束")
                 time.sleep(3.5)
                 finish_fishing(region["left"] + region["width"]//2, region["top"] + region["height"]//2)
                 break 
 
 def finish_fishing(window_center_x, window_center_y):
-    print(">>> 动作：点击鼠标左键确认")
     # 移动鼠标到窗口中心 (防止点歪)
     pydirectinput.moveTo(window_center_x, window_center_y)
     time.sleep(0.2)
@@ -155,13 +155,13 @@ def finish_fishing(window_center_x, window_center_y):
     pydirectinput.click()
 
 def cast_rod():
-    print(">>> 动作：蓄力抛竿...")
     pydirectinput.keyDown('space')  # 按下不放
-    time.sleep(0.38)                 # 持续 0.4 秒
+    time.sleep(0.38)                 # 持续 0.38 秒
     pydirectinput.keyUp('space')    # 松开
-    print(">>> 动作：抛竿完成")
+    print(">>> 抛竿完成")
 
 def clear_backpack():
+    print(">>> 清理背包")
     # 打开背包
     pydirectinput.press('t')
 
@@ -191,6 +191,7 @@ def clear_backpack():
 
 def main():
     time.sleep(3)
+    
     with mss.mss() as sct: 
         while True:
             # 1. 抛竿
@@ -203,7 +204,7 @@ def main():
             play_qte(sct) 
             
             # 4. 结束
-            print("这轮的钓鱼结束")
+            print("================这轮的钓鱼结束================")
             time.sleep(2)
 
 if __name__ == "__main__": 

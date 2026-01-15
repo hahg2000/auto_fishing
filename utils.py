@@ -3,6 +3,65 @@ import configparser
 import os
 import sys
 
+# 默认的配置内容
+DEFAULT_CONFIG_CONTENT = """[hook]
+; 感叹号位置
+top_percent = 29
+bottom_percent = 41
+left_percent = 47
+right_percent = 53
+
+; 感叹号匹配度，游戏分辨率越大，感叹号的匹配度可能就越小
+match_percent = 0.60
+
+[roi]
+; qte位置
+top_percent = 85
+bottom_percent = 89
+left_percent = 39
+right_percent = 65
+
+; 黄色颜色区间
+lower_yellow_hue = 20
+lower_yellow_saturation = 100
+lower_yellow_value = 185
+
+upper_yellow_hue = 30
+upper_yellow_saturation = 255
+upper_yellow_value = 255
+
+[backpack]
+; 一键出售按钮位置
+one_click_sale_left = 0.87
+one_click_sale_top = 0.92
+
+; 全选按钮位置
+select_all_left = 0.82
+select_all_top = 0.92
+
+; 圆形打钩按钮位置
+circle_check_left = 0.92
+circle_check_top = 0.92
+
+; 提示框确定按钮位置
+dialog_confirm_left = 0.57
+dialog_confirm_top = 0.61
+
+; 退出背包位置
+quit_backpack_left = 0.1
+quit_backpack_top = 0.12
+
+[time]
+; 一轮钓鱼结束后等待的时间，根据网络情况可以调整
+round_end_wait_time = 2
+
+; 钓鱼成功后的停留时间，来等待动画效果结束，根据电脑情况可以调整
+fish_end_wait_time = 3
+
+; 执行脚本后的停留时间，来预留时间能切换到游戏界面
+begin_fish_wait_time = 3
+"""
+
 def get_window_region(window_title):
     """
     根据窗口标题找到窗口的 (left, top, width, height)
@@ -50,14 +109,16 @@ def read_ini(filename: str = "config.ini"):
     # 2. 将基础路径和文件名拼接成【绝对路径】
     full_path = os.path.join(base_path, filename)
     
-    # 3. 打印一下路径，方便调试（看到打包后它到底去哪里找文件了）
-    print(f"正在读取配置文件路径: {full_path}") 
+    print(f">>> 正在读取配置文件路径: {full_path}") 
     config = configparser.ConfigParser()
     
-    # 4. 使用拼接好的 full_path 进行判断和读取
     if not os.path.exists(full_path):
-        # 这里建议把 full_path 打印出来，这样报错时你知道程序去哪个路径找文件失败了
-        raise FileNotFoundError(f"配置文件未找到: {full_path}")
+        print(f">>> 配置文件未找到，正在生成默认配置: {full_path}")
+        try:
+            with open(full_path, 'w', encoding='utf-8-sig') as f:
+                f.write(DEFAULT_CONFIG_CONTENT)
+        except Exception as e:
+            print(f">>> 无法写入配置文件: {e}")
         
-    config.read(full_path, encoding="utf-8")
+    config.read(full_path, encoding="utf-8-sig")
     return config

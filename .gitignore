@@ -1,3 +1,4 @@
 auto_fishing/
 dist/
 build/
+*.spec

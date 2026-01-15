@@ -9,50 +9,46 @@ ctypes.windll.user32.SetProcessDPIAware()
 GAME_TITLE = "BrownDust II" 
 
 # 加载感叹号模板
-# template = cv2.imread('exclamation_mark.png', cv2.IMREAD_GRAYSCALE)
-image_path = utils.get_resource_path('exclamation_mark.png')
+image_path = utils.get_resource_path("exclamation_mark.png")
 template = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 region = utils.get_window_region(GAME_TITLE)
 config = utils.read_ini()
 
-roi_top_percent = int(config['roi']['top_percent'])
-roi_bottom_percent = int(config['roi']['bottom_percent'])
-roi_left_percent = int(config['roi']['left_percent'])
-roi_right_percent = int(config['roi']['right_percent'])
+roi_top_percent = int(config["roi"]["top_percent"])
+roi_bottom_percent = int(config["roi"]["bottom_percent"])
+roi_left_percent = int(config["roi"]["left_percent"])
+roi_right_percent = int(config["roi"]["right_percent"])
 
-hook_top_percent = int(config['hook']['top_percent'])
-hook_bottom_percent = int(config['hook']['bottom_percent'])
-hook_left_percent = int(config['hook']['left_percent'])
-hook_right_percent = int(config['hook']['right_percent'])
+hook_top_percent = int(config["hook"]["top_percent"])
+hook_bottom_percent = int(config["hook"]["bottom_percent"])
+hook_left_percent = int(config["hook"]["left_percent"])
+hook_right_percent = int(config["hook"]["right_percent"])
 
-lower_yellow_hue = int(config['roi']['lower_yellow_hue'])
-lower_yellow_saturation = int(config['roi']['lower_yellow_saturation'])
-lower_yellow_value = int(config['roi']['lower_yellow_value'])
-upper_yellow_hue = int(config['roi']['upper_yellow_hue'])
-upper_yellow_saturation = int(config['roi']['upper_yellow_saturation'])
-upper_yellow_value = int(config['roi']['upper_yellow_value'])
+lower_white = np.array([0, 0, 240]) 
+upper_white = np.array([180, 50, 255])
+
+lower_yellow_hue = int(config["roi"]["lower_yellow_hue"])
+lower_yellow_saturation = int(config["roi"]["lower_yellow_saturation"])
+lower_yellow_value = int(config["roi"]["lower_yellow_value"])
+upper_yellow_hue = int(config["roi"]["upper_yellow_hue"])
+upper_yellow_saturation = int(config["roi"]["upper_yellow_saturation"])
+upper_yellow_value = int(config["roi"]["upper_yellow_value"])
 lower_yellow = np.array([lower_yellow_hue, lower_yellow_saturation, lower_yellow_value])
 upper_yellow = np.array([upper_yellow_hue, upper_yellow_saturation, upper_yellow_value])
             
 hook_pos = {
-    'left': region['left'] + int(region['width'] * hook_left_percent / 100),
-    'top': region['top'] + int(region['height'] * hook_top_percent / 100),
-    'width': int(region['width'] * (hook_right_percent - hook_left_percent) / 100),
-    'height': int(region['height'] * (hook_bottom_percent - hook_top_percent) / 100)
+    "left": region["left"] + int(region["width"] * hook_left_percent / 100),
+    "top": region["top"] + int(region["height"] * hook_top_percent / 100),
+    "width": int(region["width"] * (hook_right_percent - hook_left_percent) / 100),
+    "height": int(region["height"] * (hook_bottom_percent - hook_top_percent) / 100)
 }
 
 roi_pos = {
-    'left': region['left'] + int(region['width'] * roi_left_percent / 100),
-    'top': region['top'] + int(region['height'] * roi_top_percent / 100),
-    'width': int(region['width'] * (roi_right_percent - roi_left_percent) / 100),
-    'height': int(region['height'] * (roi_bottom_percent - roi_top_percent) / 100)
+    "left": region["left"] + int(region["width"] * roi_left_percent / 100),
+    "top": region["top"] + int(region["height"] * roi_top_percent / 100),
+    "width": int(region["width"] * (roi_right_percent - roi_left_percent) / 100),
+    "height": int(region["height"] * (roi_bottom_percent - roi_top_percent) / 100)
 }
-
-# 如果屏幕色彩不同识别不出，可以改这里
-lower_white = np.array([0, 0, 240]) 
-upper_white = np.array([180, 50, 255])
-lower_yellow = np.array([20, 100, 100])
-upper_yellow = np.array([40, 255, 255]) 
 
 def wait_for_bite(sct):
     print(">>> 等待鱼上钩")
@@ -63,16 +59,13 @@ def wait_for_bite(sct):
 
     while True:
         hook_img = np.array(sct.grab(hook_pos))
-
         hook_img_gray = cv2.cvtColor(hook_img, cv2.COLOR_BGR2GRAY)
- 
         res = cv2.matchTemplate(hook_img_gray, template, cv2.TM_CCOEFF_NORMED)
-        # 60%的匹配度，可适当减少
-        loc = np.where(res >= 0.60)
+        loc = np.where(res >= float(config["hook"]["match_percent"]))
         if len(loc[0]) > 0: 
             print(">>> 鱼上钩了！") 
             # 收杆，进入QTE
-            pydirectinput.press('space')
+            pydirectinput.press("space")
             return
 
         if fail_num > 3:
@@ -90,9 +83,9 @@ def wait_for_bite(sct):
 
             wait_start_time = wait_end_time
             # 处理切换时间
-            pydirectinput.keyDown('up')  
+            pydirectinput.keyDown("up")  
             time.sleep(2)
-            pydirectinput.keyUp('up')
+            pydirectinput.keyUp("up")
 
             # 点击屏幕
             finish_fishing(region["left"] + region["width"]//2, region["top"] + region["height"]//2)
@@ -133,17 +126,16 @@ def play_qte(sct):
             cursor_x = np.argmax(col_sums) 
             #  如果画面里没有白色，cursor_x 可能是 0，需要防呆
             if np.max(col_sums) != 0: 
-                # 边界处理，向前向后5个像素都还是完美区域
                 check_y = roi.shape[0] // 2
                 if mask_yellow[check_y, cursor_x]:
                     print(">>> 击中了黄色区域")
-                    pydirectinput.press('space')
+                    pydirectinput.press("space")
         else:
             no_bar_frames += 1
 
             if no_bar_frames > 130:
                 print(">>> 钓鱼结束")
-                time.sleep(3.5)
+                time.sleep(float(config["time"]["fish_end_wait_time"]))
                 finish_fishing(region["left"] + region["width"]//2, region["top"] + region["height"]//2)
                 break 
 
@@ -155,42 +147,53 @@ def finish_fishing(window_center_x, window_center_y):
     pydirectinput.click()
 
 def cast_rod():
-    pydirectinput.keyDown('space')  # 按下不放
+    pydirectinput.keyDown("space")  # 按下不放
     time.sleep(0.38)                 # 持续 0.38 秒
-    pydirectinput.keyUp('space')    # 松开
+    pydirectinput.keyUp("space")    # 松开
     print(">>> 抛竿完成")
 
 def clear_backpack():
     print(">>> 清理背包")
     # 打开背包
-    pydirectinput.press('t')
+    pydirectinput.press("t")
 
     # 点击一键出售
     time.sleep(1)
-    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.87), int(region["top"] + region["height"] * 0.92))
+    one_click_sale_left = int(region["left"] + region["width"] * float(config["backpack"]["one_click_sale_left"]))
+    one_click_sale_top = int(region["top"] + region["height"] * float(config["backpack"]["one_click_sale_top"]))
+    pydirectinput.moveTo(one_click_sale_left, one_click_sale_top)
     pydirectinput.click()
 
     # 点击全选
-    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.82), int(region["top"] + region["height"] * 0.92))
+    time.sleep(1)
+    select_all_left = int(region["left"] + region["width"] * float(config["backpack"]["select_all_left"]))
+    select_all_top = int(region["top"] + region["height"] * float(config["backpack"]["select_all_top"]))
+    pydirectinput.moveTo(select_all_left, select_all_top)
     pydirectinput.click()
 
     # 点击打钩按钮
-    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.92), int(region["top"] + region["height"] * 0.92))
+    circle_check_left = int(region["left"] + region["width"] * float(config["backpack"]["circle_check_left"]))
+    circle_check_top = int(region["top"] + region["height"] * float(config["backpack"]["circle_check_top"]))
+    pydirectinput.moveTo(circle_check_left, circle_check_top)
     pydirectinput.click()
 
     # 点击确认按钮
     time.sleep(0.5)
-    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.57), int(region["top"] + region["height"] * 0.61))
+    dialog_confirm_left = int(region["left"] + region["width"] * float(config["backpack"]["dialog_confirm_left"]))
+    dialog_confirm_top = int(region["top"] + region["height"] * float(config["backpack"]["dialog_confirm_top"]))
+    pydirectinput.moveTo(dialog_confirm_left, dialog_confirm_top)
     pydirectinput.click()
 
     # 退出背包
     time.sleep(0.5)
-    pydirectinput.moveTo(int(region["left"] + region["width"] * 0.1), int(region["top"] + region["height"] * 0.12))
+    quit_backpack_left = int(region["left"] + region["width"] * float(config["backpack"]["quit_backpack_left"]))
+    quit_backpack_top = int(region["top"] + region["height"] * float(config["backpack"]["quit_backpack_top"]))
+    pydirectinput.moveTo(quit_backpack_left, quit_backpack_top)
     pydirectinput.click()
     time.sleep(0.5)
 
 def main():
-    time.sleep(3)
+    time.sleep(float(config["time"]["begin_fish_wait_time"]))
     
     with mss.mss() as sct: 
         while True:
@@ -205,7 +208,7 @@ def main():
             
             # 4. 结束
             print("================这轮的钓鱼结束================")
-            time.sleep(2)
+            time.sleep(float(config["time"]["round_end_wait_time"]))
 
 if __name__ == "__main__": 
     main()

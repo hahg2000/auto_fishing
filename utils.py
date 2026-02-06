@@ -12,7 +12,7 @@ left_percent = 47
 right_percent = 53
 
 ; 感叹号匹配度，游戏分辨率越大，感叹号的匹配度可能就越小
-match_percent = 0.60
+match_percent = 0.53
 
 [roi]
 ; qte位置
@@ -25,10 +25,17 @@ right_percent = 65
 lower_yellow_hue = 20
 lower_yellow_saturation = 100
 lower_yellow_value = 185
-
 upper_yellow_hue = 30
 upper_yellow_saturation = 255
 upper_yellow_value = 255
+
+; 红色颜色区间
+lower_red_hue = 170
+lower_red_saturation = 100
+lower_red_value = 100
+upper_red_hue = 180
+upper_red_saturation = 255
+upper_red_value = 255
 
 [backpack]
 ; 一键出售按钮位置
@@ -60,6 +67,9 @@ fish_end_wait_time = 3
 
 ; 执行脚本后的停留时间，来预留时间能切换到游戏界面
 begin_fish_wait_time = 3
+
+; 这里钓鱼的持续时间，会随着等级或者渔竿变化
+longest_keep_time = 15
 """
 
 def get_window_region(window_title):

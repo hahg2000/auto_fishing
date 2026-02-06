@@ -14,6 +14,8 @@ template = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 region = utils.get_window_region(GAME_TITLE)
 config = utils.read_ini()
 
+longest_keep_time = int(config["time"]["longest_keep_time"])
+
 roi_top_percent = int(config["roi"]["top_percent"])
 roi_bottom_percent = int(config["roi"]["bottom_percent"])
 roi_left_percent = int(config["roi"]["left_percent"])
@@ -26,6 +28,15 @@ hook_right_percent = int(config["hook"]["right_percent"])
 
 lower_white = np.array([0, 0, 240]) 
 upper_white = np.array([180, 50, 255])
+
+lower_red_hue = int(config["roi"]["lower_red_hue"])
+lower_red_saturation = int(config["roi"]["lower_red_saturation"])
+lower_red_value = int(config["roi"]["lower_red_value"])
+upper_red_hue = int(config["roi"]["upper_red_hue"])
+upper_red_saturation = int(config["roi"]["upper_red_saturation"])
+upper_red_value = int(config["roi"]["upper_red_value"])
+lower_red = np.array([lower_red_hue, lower_red_saturation, lower_red_value])
+upper_red = np.array([upper_red_hue, upper_red_saturation, upper_red_value])
 
 lower_yellow_hue = int(config["roi"]["lower_yellow_hue"])
 lower_yellow_saturation = int(config["roi"]["lower_yellow_saturation"])
@@ -68,7 +79,7 @@ def wait_for_bite(sct):
             pydirectinput.press("space")
             return
 
-        if fail_num > 3:
+        if fail_num > 2:
             print(">>> 背包满了")
             fail_num = 0
             clear_backpack()
@@ -99,14 +110,16 @@ def play_qte(sct):
 
     no_bar_frames = 0
     start_time = time.time()
-    # 最大时长15秒
-    while time.time() - start_time < 15:
+    while time.time() - start_time < longest_keep_time:
         # 提取qte条的范围
         roi = np.array(sct.grab(roi_pos))
         
         # MSS 默认是 BGRA
         roi_hsv = cv2.cvtColor(roi, cv2.COLOR_BGRA2BGR) 
         roi_hsv = cv2.cvtColor(roi_hsv, cv2.COLOR_BGR2HSV)
+        
+        if solve_ice_trouble(roi_hsv):
+            continue
         
         # 提取黄色区域
         mask_yellow = cv2.inRange(roi_hsv, lower_yellow, upper_yellow)
@@ -133,7 +146,7 @@ def play_qte(sct):
         else:
             no_bar_frames += 1
 
-            if no_bar_frames > 130:
+            if no_bar_frames > 150:
                 print(">>> 钓鱼结束")
                 time.sleep(float(config["time"]["fish_end_wait_time"]))
                 finish_fishing(region["left"] + region["width"]//2, region["top"] + region["height"]//2)
@@ -152,6 +165,24 @@ def cast_rod():
     pydirectinput.keyUp("space")    # 松开
     print(">>> 抛竿完成")
 
+def solve_ice_trouble(roi_hsv):
+    """
+    检测并解决冰冻状态
+    :param roi_hsv: 当前QTE画面的 HSV 数据
+    :return: True 如果检测到冰冻并执行了操作，False 如果无冰冻
+    """
+    mask = cv2.inRange(roi_hsv, lower_red, upper_red)
+                
+    # 计算红色像素数量，阈值设为 10 左右
+    if cv2.countNonZero(mask) > 10: 
+        print(">>> 检测到冰冻！正在破冰 (按空格)...")
+        pydirectinput.press('space')
+        # 为了防止按太快游戏不识别，给个极短的间隔
+        time.sleep(0.05) 
+        return True
+    
+    return False
+    
 def clear_backpack():
     print(">>> 清理背包")
     # 打开背包

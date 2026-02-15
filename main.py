@@ -27,8 +27,21 @@ hook_bottom_percent = utils.readConfigAndCastInt(config, "hook", "bottom_percent
 hook_left_percent = utils.readConfigAndCastInt(config, "hook", "left_percent")
 hook_right_percent = utils.readConfigAndCastInt(config, "hook", "right_percent")
 
-lower_white = np.array([0, 0, 255]) 
-upper_white = np.array([180, 0, 255])
+hook_lower_yellow_hue = utils.readConfigAndCastInt(config, 'hook', 'hook_lower_yellow_hue')
+hook_lower_yellow_saturation = utils.readConfigAndCastInt(config, 'hook', 'hook_lower_yellow_saturation')
+hook_lower_yellow_value = utils.readConfigAndCastInt(config, 'hook', 'hook_lower_yellow_value')
+hook_upper_yellow_hue = utils.readConfigAndCastInt(config, 'hook', 'hook_upper_yellow_hue')
+hook_upper_yellow_saturation = utils.readConfigAndCastInt(config, 'hook', 'hook_upper_yellow_saturation')
+hook_upper_yellow_value = utils.readConfigAndCastInt(config, 'hook', 'hook_upper_yellow_value')
+
+lower_white_hue = utils.readConfigAndCastInt(config, 'roi', 'lower_white_hue')
+lower_white_saturation = utils.readConfigAndCastInt(config, 'roi', 'lower_white_saturation')
+lower_white_value = utils.readConfigAndCastInt(config, 'roi', 'lower_white_value')
+upper_white_hue = utils.readConfigAndCastInt(config, 'roi', 'upper_white_hue')
+upper_white_saturation = utils.readConfigAndCastInt(config, 'roi', 'upper_white_saturation')
+upper_white_value = utils.readConfigAndCastInt(config, 'roi', 'upper_white_value')
+lower_white = np.array([lower_white_hue, lower_white_saturation, lower_white_value]) 
+upper_white = np.array([upper_white_hue, upper_white_saturation, upper_white_value])
 
 lower_red_hue = utils.readConfigAndCastInt(config, "roi", "lower_red_hue")
 lower_red_saturation = utils.readConfigAndCastInt(config, "roi", "lower_red_saturation")
@@ -129,10 +142,13 @@ def wait_for_bite(sct):
 
     while True:
         hook_img = np.array(sct.grab(hook_pos))
-        hook_img_gray = cv2.cvtColor(hook_img, cv2.COLOR_BGR2GRAY)
-        res = cv2.matchTemplate(hook_img_gray, template, cv2.TM_CCOEFF_NORMED)
-        loc = np.where(res >= float(config["hook"]["match_percent"]))
-        if len(loc[0]) > 0: 
+        hook_hsv = cv2.cvtColor(hook_img, cv2.COLOR_BGRA2BGR)
+        hook_hsv = cv2.cvtColor(hook_hsv, cv2.COLOR_BGR2HSV)
+        hook_yellow = utils.create_color_mask([hook_lower_yellow_hue, hook_lower_yellow_saturation, hook_lower_yellow_value], 
+                                              [hook_upper_yellow_hue, hook_upper_yellow_saturation, hook_upper_yellow_value], 
+                                              hook_hsv, is_dilate=False)
+        hook_yellow_pixel = cv2.countNonZero(hook_yellow) * 5
+        if hook_yellow_pixel > 600: 
             print(">>> 鱼上钩了！") 
             # 收杆，进入QTE
             pydirectinput.press("space")
@@ -199,13 +215,13 @@ def play_qte(sct):
         if time_red_pixel_count + time_green_pixel_count > 1000: 
             no_bar_frames = 0
             # 找到光标位置
-            mask_cursor = cv2.inRange(roi_hsv, lower_white, upper_white)
+            mask_cursor = utils.create_color_mask(lower_white, upper_white, roi_hsv, is_dilate=False)
             col_sums = np.sum(mask_cursor, axis=0)
             # 找到白色像素最多的那一列的索引
             cursor_x = np.argmax(col_sums)
             
             #  如果画面里没有白色，cursor_x 可能是 0，需要防呆
-            if np.max(col_sums) != 0: 
+            if np.max(col_sums) > 0: 
                 check_y = roi.shape[0] // 2
                 if mask_yellow[check_y, cursor_x]:
                     print(">>> 击中了黄色区域")

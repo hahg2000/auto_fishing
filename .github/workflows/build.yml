@@ -31,7 +31,7 @@ jobs:
     # 4. 运行打包命令
     - name: Build with PyInstaller
       run: |
-        pyinstaller -F -n BD2_AutoFishing --add-data "exclamation_mark.png;." --onefile main.py
+        pyinstaller -F -n BD2_AutoFishing --onefile main.py
 
     # 5. (可选) 上传打包好的 EXE 供你下载检查
     - name: Upload Artifact

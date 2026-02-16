@@ -82,13 +82,17 @@ def create_color_mask(lower_color, upper_color, roi_hsv, is_dilate=True):
 # 默认的配置内容
 DEFAULT_CONFIG_CONTENT = """[hook]
 ; 感叹号位置
-top_percent = 29
-bottom_percent = 41
-left_percent = 47
-right_percent = 53
+top_percent = 31
+bottom_percent = 40
+left_percent = 49
+right_percent = 51
 
-; 感叹号匹配度，游戏分辨率越大，感叹号的匹配度可能就越小
-match_percent = 0.53
+hook_lower_yellow_hue = 20
+hook_lower_yellow_saturation = 35
+hook_lower_yellow_value = 210
+hook_upper_yellow_hue = 30
+hook_upper_yellow_saturation = 120
+hook_upper_yellow_value = 255
 
 [roi]
 ; qte位置

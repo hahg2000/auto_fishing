@@ -8,9 +8,6 @@ import utils
 ctypes.windll.user32.SetProcessDPIAware()
 GAME_TITLE = "BrownDust II" 
 
-# 加载感叹号模板
-image_path = utils.get_resource_path("exclamation_mark.png")
-template = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 region = utils.get_window_region(GAME_TITLE)
 config = utils.read_ini()
 
@@ -101,7 +98,7 @@ time_left_percent = utils.readConfigAndCastInt(config, 'roi', 'time_left_percent
 time_right_percent = utils.readConfigAndCastInt(config, 'roi', 'time_right_percent')
 
 if not region:
-    print("Error: Could not find game window")
+    input(">>> 程序结束，按回车键关闭")
     exit(1)
 
 hook_pos = {

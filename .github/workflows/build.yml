@@ -1,41 +1,57 @@
 name: Build EXE Verification
 
-# 触发条件：当推送到 main 分支，或者提交 Pull Request 时触发
+# 触发条件
 on:
+  release:
+    # 当在 GitHub 网页上点击 Publish release 时触发
+    types: [published]
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    tags:
+      # 当 push 以 v 开头的 tag 时触发 (例如 v1.0.0)
+      - 'v*'
+  # 允许在 Actions 页面手动点击 "Run workflow" 测试打包
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest  # 使用 Windows 环境
 
     steps:
-    # 1.以此拉取代码
-    - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    # 2. 安装 Python
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12.4' # 根据你的实际版本调整
+      # 2. 安装 Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          # 根据实际版本调整
+          python-version: '3.12.4' 
 
-    # 3. 安装依赖
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyinstaller
-        pip install -r requirements.txt
+      # 3. 安装依赖
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
 
     # 4. 运行打包命令
-    - name: Build with PyInstaller
-      run: |
-        pyinstaller -F -n BD2_AutoFishing --onefile main.py
+      - name: Build EXE with PyInstaller
+        run: |
+          pyinstaller -F -n BD2_AutoFishing --onefile main.py
 
-    # 5. (可选) 上传打包好的 EXE 供你下载检查
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: AutoFisher-Build
-        path: dist/BD2_AutoFishing.exe
+    # 5. 上传打包好的 EXE 供下载
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoFisher-Build
+          path: dist/BD2_AutoFishing.exe
+
+    # 自动上传到 Release 资产中
+      - name: Upload to Release
+        # 只有当触发条件是发布 release 或推送 tag 时，才执行发布动作
+        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/AutoFishing.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

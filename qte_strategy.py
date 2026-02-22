@@ -55,19 +55,19 @@ class BaseQTEStrategy:
         time_left_percent = utils.readConfigAndCastInt(config, 'roi', 'time_left_percent')
         time_right_percent = utils.readConfigAndCastInt(config, 'roi', 'time_right_percent')
 
-        self.roi_pos = {
-            "left": region["left"] + int(region["width"] * roi_left_percent / 100),
-            "top": region["top"] + int(region["height"] * roi_top_percent / 100),
-            "width": int(region["width"] * (roi_right_percent - roi_left_percent) / 100),
-            "height": int(region["height"] * (roi_bottom_percent - roi_top_percent) / 100)
-        }
+        self.roi_pos = (
+            region["left"] + int(region["width"] * roi_left_percent / 100),
+            region["top"] + int(region["height"] * roi_top_percent / 100),
+            region["left"] + int(region["width"] * roi_right_percent / 100),
+            region["top"] + int(region["height"] * roi_bottom_percent / 100)
+        )
 
-        self.rot_pos = {
-            "left": region["left"] + int(region["width"] * time_left_percent / 100),
-            "top": region["top"] + int(region["height"] * time_top_percent / 100),
-            "width": int(region["width"] * (time_right_percent - time_left_percent) / 100),
-            "height": int(region["height"] * (time_bottom_percent - time_top_percent) / 100)
-        }
+        self.rot_pos = (
+            region["left"] + int(region["width"] * time_left_percent / 100),
+            region["top"] + int(region["height"] * time_top_percent / 100),
+            region["left"] + int(region["width"] * time_right_percent / 100),
+            region["top"] + int(region["height"] * time_bottom_percent / 100)
+        )
     def play_qte(self, sct, region):
         """核心执行方法，子类必须重写这个方法"""
         raise NotImplementedError("子类必须实现 play_qte() 方法")
@@ -99,10 +99,14 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
         start_time = time.time()
         while time.time() - start_time < self.longest_keep_time:
             # 提取qte条的范围
-            roi = np.array(sct.grab(self.roi_pos))
-            rot = np.array(sct.grab(self.rot_pos))
+            roi_frame = sct.grab(self.roi_pos)
+            rot_frame = sct.grab(self.rot_pos)
+            if roi_frame is None or rot_frame is None:
+                continue
+            roi = np.array(roi_frame)
+            rot = np.array(rot_frame)
             
-            # MSS 默认是 BGRA
+            # DXCAM 输出 BGRA
             roi_hsv = cv2.cvtColor(roi, cv2.COLOR_BGRA2BGR) 
             roi_hsv = cv2.cvtColor(roi_hsv, cv2.COLOR_BGR2HSV)
             rot_hsv = cv2.cvtColor(rot, cv2.COLOR_BGRA2BGR)
@@ -183,10 +187,14 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
         start_time = time.time()
         while time.time() - start_time < self.longest_keep_time:
             # 提取qte条的范围
-            roi = np.array(sct.grab(self.roi_pos))
-            rot = np.array(sct.grab(self.rot_pos))
+            roi_frame = sct.grab(self.roi_pos)
+            rot_frame = sct.grab(self.rot_pos)
+            if roi_frame is None or rot_frame is None:
+                continue
+            roi = np.array(roi_frame)
+            rot = np.array(rot_frame)
             
-            # MSS 默认是 BGRA
+            # DXCAM 输出 BGRA
             roi_hsv = cv2.cvtColor(roi, cv2.COLOR_BGRA2BGR) 
             roi_hsv = cv2.cvtColor(roi_hsv, cv2.COLOR_BGR2HSV)
             rot_hsv = cv2.cvtColor(rot, cv2.COLOR_BGRA2BGR)

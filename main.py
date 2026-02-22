@@ -1,10 +1,10 @@
 import cv2
-import mss
 import numpy as np
 import pydirectinput
 import time
 import ctypes
 import utils
+import dxcam
 import qte_strategy as strategy
 ctypes.windll.user32.SetProcessDPIAware()
 GAME_TITLE = "BrownDust II" 
@@ -47,12 +47,12 @@ if not region:
     input(">>> 程序结束，按回车键关闭")
     exit(1)
 
-hook_pos = {
-    "left": region["left"] + int(region["width"] * hook_left_percent / 100),
-    "top": region["top"] + int(region["height"] * hook_top_percent / 100),
-    "width": int(region["width"] * (hook_right_percent - hook_left_percent) / 100),
-    "height": int(region["height"] * (hook_bottom_percent - hook_top_percent) / 100)
-}
+hook_pos = (
+    region["left"] + int(region["width"] * hook_left_percent / 100),
+    region["top"] + int(region["height"] * hook_top_percent / 100),
+    region["left"] + int(region["width"] * hook_right_percent / 100),
+    region["top"] + int(region["height"] * hook_bottom_percent / 100),
+)
 
 # ================================== 功能区 ==================================
 
@@ -70,29 +70,39 @@ def wait_for_bite(sct):
     fail_num = 0
 
     while True:
-        hook_img = np.array(sct.grab(hook_pos))
-        hook_hsv = cv2.cvtColor(hook_img, cv2.COLOR_BGRA2BGR)
-        hook_hsv = cv2.cvtColor(hook_hsv, cv2.COLOR_BGR2HSV)
+        hook_frame = sct.grab(hook_pos)
+        print(f"hook_pos: {hook_pos}")
+        if hook_frame is None:
+            continue
+        hook_img = np.array(hook_frame)
+        hook_hsv = cv2.cvtColor(hook_img, cv2.COLOR_BGR2HSV)
+        
+        # ori = sct.grab((region["left"], region["top"], region["right"], region["bottom"]))
+        # cv2.imshow("hook", hook_img)
+        # cv2.imshow("ori", ori)
+        # cv2.waitKey(1)
+        
         hook_yellow = utils.create_color_mask([hook_lower_yellow_hue, hook_lower_yellow_saturation, hook_lower_yellow_value], 
                                               [hook_upper_yellow_hue, hook_upper_yellow_saturation, hook_upper_yellow_value], 
                                               hook_hsv, is_dilate=False)
-        hook_yellow_pixel = cv2.countNonZero(hook_yellow) * 5
-        if hook_yellow_pixel > 600: 
+        hook_yellow_pixel = cv2.countNonZero(hook_yellow)
+        print(f"hook_yellow_pixel: {hook_yellow_pixel}")
+        if hook_yellow_pixel > 8000: 
             print(">>> 鱼上钩了！") 
             # 收杆，进入QTE
             pydirectinput.press("space")
             return
 
-        if fail_num > 2:
-            print(">>> 背包满了")
-            fail_num = 0
-            clear_backpack()
-            cast_rod()
-            continue
+        # if fail_num > 2:
+        #     print(">>> 背包满了")
+        #     fail_num = 0
+        #     clear_backpack()
+        #     cast_rod()
+        #     continue
 
         wait_end_time = time.time()
         # 如果等待时间超过10秒，代表可能有突发情况
-        if wait_end_time - wait_start_time > 10:
+        if wait_end_time - wait_start_time > 15:
             print(">>> 突发情况")
             fail_num += 1
 
@@ -171,7 +181,7 @@ def main():
     
     time.sleep(float(config["time"]["begin_fish_wait_time"]))
 
-    with mss.mss() as sct: 
+    with dxcam.create(output_color="BGR") as sct: 
         while True:
             # 1. 抛竿
             cast_rod()

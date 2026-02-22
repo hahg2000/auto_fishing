@@ -4,6 +4,7 @@ import os
 import sys
 import numpy as np
 import cv2
+import dxcam
 
 def get_window_region(window_title):
     """
@@ -20,8 +21,36 @@ def get_window_region(window_title):
     w = right - x
     h = bottom - y
     
-    # 返回 mss 需要的字典格式
-    return {'left': x, 'top': y, 'width': w, 'height': h}
+    # 返回 dxcam 需要的字典格式
+    return {'left': x, 'top': y, 'right': right, 'bottom': bottom, 'width': w, 'height': h}
+
+# def to_dxcam_region(region):
+#     """
+#     将 {'left','top','width','height'} 转为 dxcam 使用的 (left, top, right, bottom)
+#     """
+#     return (
+#         region["left"],
+#         region["top"],
+#         region["left"] + region["width"],
+#         region["top"] + region["height"],
+#     )
+
+# class DxcamCapture:
+#     def __init__(self,):
+#         self._camera = dxcam.create()
+
+#     def grab(self, region):
+#         return self._camera.grab(region=to_dxcam_region(region))
+
+#     def __enter__(self):
+#         return self
+
+#     def __exit__(self, exc_type, exc, tb):
+#         if hasattr(self._camera, "stop"):
+#             try:
+#                 self._camera.stop()
+#             except Exception:
+#                 pass
 
 def get_resource_path(relative_path):
     """

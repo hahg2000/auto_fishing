@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+import win32gui
 
 import numpy as np
 from windows_capture import Frame, InternalCaptureControl, WindowsCapture
@@ -16,16 +17,22 @@ class WindowCaptureBuffer:
         self._frame_id = 0
         self._updated_at = 0.0
 
+        hwnd = win32gui.FindWindow(None, window_name)
+
         self._capture = WindowsCapture(
             cursor_capture=False,
             draw_border=False,
             window_name=window_name,
+            # window_hwnd=hwnd
+            callback_mode="queue",
+            callback_queue_size=1,  # 可试 1~3
         )
         self._capture.event(self.on_frame_arrived) # type: ignore
         self._capture.event(self.on_closed) # type: ignore
 
     def start(self) -> None:
         # WindowsCapture 的 start 是阻塞式的
+        # self._capture.start_free_threaded()
         self._capture.start()
 
     def get_latest(self) -> tuple[np.ndarray | None, int, float]:

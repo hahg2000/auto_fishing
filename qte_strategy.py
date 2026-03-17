@@ -147,6 +147,7 @@ class BaseQTEStrategy:
         # 用冷却时间限制按键频率
         now = time.monotonic()
         if now - self._last_press_at < self._press_cooldown_seconds:
+            print(">>> Press cooldown, skip")
             return False
         self._last_press_at = now
         return True
@@ -179,7 +180,7 @@ class BaseQTEStrategy:
         return [
             ("QTE ROI", qte_bgr),
             ("QTE Yellow", mask_yellow),
-            ("QTE Cursor", mask_cursor),
+            # ("QTE Cursor", mask_cursor),
             # ("Time ROI", time_bgr),
             # ("Time Green", mask_green),
             # ("Time Red", mask_red),
@@ -267,7 +268,7 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
         qte_hsv = self._get_qte_hsv(frame)
         time_hsv = self._get_time_hsv(frame)
         if not self._is_bar_active(time_hsv):
-            return self._track_no_bar(limit=30)
+            return self._track_no_bar(1)
 
         self._no_bar_frames = 0
         cursor_x = self._get_cursor_x(qte_hsv)

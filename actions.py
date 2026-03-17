@@ -4,10 +4,6 @@ from dataclasses import dataclass, field
 import heapq
 import threading
 import time
-import win32api
-import win32gui
-import win32con
-
 
 import pydirectinput
 
@@ -59,12 +55,12 @@ class ActionExecutor:
     def press(self, key: str, delay: float = 0.0) -> None:
         self._submit("press", (key,), delay)
 
-    def hold_mouse_left_btn(self, x: int, y: int, hold_time: float, delay: float = 0.0) -> None:
-        self._submit("hold_mouse_left_btn", (x, y, hold_time), delay)
+    def hold(self, key: str, duration: float, delay: float = 0.0) -> None:
+        self._submit("hold", (key, duration), delay)
 
     def click(self, x: int, y: int, delay: float = 0.0) -> None:
         self._submit("click", (x, y), delay)
-    
+
     def get_queue_size(self) -> int:
         # 供统计使用：当前队列中待执行的动作数量
         with self._condition:
@@ -115,27 +111,17 @@ class ActionExecutor:
             pydirectinput.press(key)
             return
 
+        if action.kind == "hold":
+            print(f"按住{action.payload}")
+            key, duration = action.payload
+            pydirectinput.keyDown(key)
+            time.sleep(duration)
+            pydirectinput.keyUp(key)
+            return
+
         if action.kind == "click":
             x, y = action.payload
             pydirectinput.click(x, y)
-            return
-        
-        if action.kind == "hold_mouse_left_btn":
-            x, y, hold_time = action.payload
-            # 1. 移动鼠标到目标绝对坐标
-            pydirectinput.moveTo(x, y)
-        
-            # 给游戏引擎一丢丢时间去渲染高亮状态（防吞按键的关键细节）
-            time.sleep(0.05)
-            
-            # 2. 按下鼠标左键
-            pydirectinput.mouseDown(button='left')
-            
-            # 3. 保持按压指定的时间
-            time.sleep(hold_time)
-            
-            # 4. 松开鼠标左键
-            pydirectinput.mouseUp(button='left')
             return
 
         raise ValueError(f"未知的动作类型: {action.kind}")

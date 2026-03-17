@@ -81,7 +81,7 @@ class AutoFishingEngine:
         self._hold_mouse_x_percent = utils.read_config_int(config, "hook", "hold_mouse_x_percent")
         self._hold_mouse_y_percent = utils.read_config_int(config, "hook", "hold_mouse_y_percent")
         # 抛竿动作持续时间
-        self._cast_hold_seconds = 0.43
+        self._cast_hold_seconds = 0.45
         # 抛竿后到可以检测上钩的等待时间
         self._cast_recover_seconds = 1.0
         # 收杆后进入 QTE 的等待时间
@@ -171,11 +171,7 @@ class AutoFishingEngine:
     def _handle_cast(self) -> None:
         print(">>> Casting...")        
         # utils.relative_point()
-        region = utils.get_client_region(self.hwnd)
-        relative_point = utils.relative_point(region, self._hold_mouse_x_percent, self._hold_mouse_y_percent)
-        self._cast_client_x = relative_point[0]  # 加入微小随机偏移，模拟人类操作
-        self._cast_client_y = relative_point[1]  # 加入微小随机偏移，模拟人类操作
-        self._actions.hold_mouse_left_btn(int(self._cast_client_x), int(self._cast_client_y), 1)
+        self._actions.hold("space", duration=self._cast_hold_seconds)
         # 传入你的游戏窗口句柄、坐标和长按时间
         
         self._set_state(FishingState.WAITING_BITE, delay=self._cast_recover_seconds)
@@ -237,7 +233,6 @@ class AutoFishingEngine:
 
         result = self._strategy.step(frame)
         if result.press_space:
-            print(">>> QTE step: press space")
             self._actions.press("space")
 
         if not result.finished:

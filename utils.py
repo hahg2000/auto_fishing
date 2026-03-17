@@ -26,7 +26,7 @@ def get_pure_game_frame(hwnd, raw_frame_bgra):
     """
     将包含标题栏的原始窗口截图，精准裁切为纯游戏画面
     :param hwnd: 游戏窗口句柄
-    :param raw_frame_bgra: windows_capture 返回的 numpy 数组
+    :param raw_frame_bgra: dxcam 返回的 numpy 数组
     :return: 纯游戏画面的 numpy 数组
     """
     # 1. 获取包含边框和标题栏的整个窗口的坐标 (左, 上, 右, 下)

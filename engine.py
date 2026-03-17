@@ -160,7 +160,7 @@ class AutoFishingEngine:
 
         if state == FishingState.QTE:
             self._strategy.reset()
-        if state == FishingState.WAITING_BITE or state == FishingState.ROUND_END:
+        if state == FishingState.WAITING_BITE:
             self._waiting_started_at = time.monotonic()
 
         print(

@@ -113,7 +113,6 @@ def main() -> int:
     debug_show_windows = utils.read_config_bool(config, "debug", "show_windows", True)
     debug_show_qte_windows = utils.read_config_bool(config, "debug", "show_qte_windows", True)
     debug_show_hook_windows = utils.read_config_bool(config, "debug", "show_hook_windows", True)
-    win32gui.FindWindow(None, GAME_TITLE)
     stats_interval = utils.read_config_float(config, "debug", "stats_interval", 1.0)
     engine = AutoFishingEngine(
         config=config,

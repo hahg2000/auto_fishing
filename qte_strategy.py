@@ -106,12 +106,10 @@ class BaseQTEStrategy:
         # 单帧判断，不允许 sleep 或长循环
         raise NotImplementedError
 
-    def _get_qte_hsv(self, frame: np.ndarray) -> np.ndarray:
-        pure_frame = utils.get_pure_game_frame(self.hwnd, frame)
+    def _get_qte_hsv(self, pure_frame: np.ndarray) -> np.ndarray:
         return utils.to_hsv(utils.crop_frame(pure_frame, self._qte_box))
 
-    def _get_time_hsv(self, frame: np.ndarray) -> np.ndarray:
-        pure_frame = utils.get_pure_game_frame(self.hwnd, frame)
+    def _get_time_hsv(self, pure_frame: np.ndarray) -> np.ndarray:
         return utils.to_hsv(utils.crop_frame(pure_frame, self._time_box))
 
     def _is_bar_active(self, time_hsv: np.ndarray) -> bool:
@@ -210,8 +208,9 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
             self.reset()
             return QTEStepResult(finished=True)
 
-        qte_hsv = self._get_qte_hsv(frame)
-        time_hsv = self._get_time_hsv(frame)
+        pure_frame = utils.get_pure_game_frame(self.hwnd, frame)
+        qte_hsv = self._get_qte_hsv(pure_frame)
+        time_hsv = self._get_time_hsv(pure_frame)
         if not self._is_bar_active(time_hsv):
             return self._track_no_bar(duration_seconds=1.0)
 
@@ -236,7 +235,8 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
 
     def debug_view(self, frame: np.ndarray) -> list[tuple[str, np.ndarray]]:
         views = super().debug_view(frame)
-        qte_hsv = self._get_qte_hsv(frame)
+        pure_frame = utils.get_pure_game_frame(self.hwnd, frame)
+        qte_hsv = self._get_qte_hsv(pure_frame)
         ice_mask = cv2.inRange(qte_hsv, self._lower_red, self._upper_red)
         views.append(("QTE Ice", ice_mask))
         return views
@@ -265,8 +265,9 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
             self.reset()
             return QTEStepResult(finished=True)
 
-        qte_hsv = self._get_qte_hsv(frame)
-        time_hsv = self._get_time_hsv(frame)
+        pure_frame = utils.get_pure_game_frame(self.hwnd, frame)
+        qte_hsv = self._get_qte_hsv(pure_frame)
+        time_hsv = self._get_time_hsv(pure_frame)
         if not self._is_bar_active(time_hsv):
             return self._track_no_bar(1)
 
@@ -291,7 +292,8 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
 
     def debug_view(self, frame: np.ndarray) -> list[tuple[str, np.ndarray]]:
         views = super().debug_view(frame)
-        qte_hsv = self._get_qte_hsv(frame)
+        pure_frame = utils.get_pure_game_frame(self.hwnd, frame)
+        qte_hsv = self._get_qte_hsv(pure_frame)
         mask_blue = utils.create_color_mask(self._lower_blue, self._upper_blue, qte_hsv)
         views.append(("QTE Blue", mask_blue))
         return views

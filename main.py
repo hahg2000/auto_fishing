@@ -1,18 +1,24 @@
-import cv2
-import numpy as np
-import pydirectinput
-import time
+from __future__ import annotations
+
+import configparser
 import ctypes
-import utils
-import dxcam
+import time
+from typing import Type
+
+import cv2
+import pydirectinput
+
 import qte_strategy as strategy
+import utils
+from utils import DxCameraCapture, Rect
+
 ctypes.windll.user32.SetProcessDPIAware()
-GAME_TITLE = "BrownDust II" 
+GAME_TITLE = "BrownDust II"
+BITE_PIXEL_THRESHOLD = 8000
+BITE_TIMEOUT_SECONDS = 15
+CAST_HOLD_SECONDS = 0.38
 
-region = utils.get_window_region(GAME_TITLE)
-config = utils.read_ini()
-
-QTE_STRATEGIES_MAP = {
+QTE_STRATEGIES_MAP: dict[str, Type[strategy.BaseQTEStrategy]] = {
     "烟波湖": strategy.FrostStraitQTEStrategy,
     "浅岸": strategy.FrostStraitQTEStrategy,
     "寒霜海峡": strategy.FrostStraitQTEStrategy,
@@ -20,181 +26,134 @@ QTE_STRATEGIES_MAP = {
     "亚特兰蒂斯": strategy.FrostStraitQTEStrategy,
 }
 
-# ================================== 读取配置 ==================================
 
-hook_top_percent = utils.readConfigAndCastInt(config, "hook", "top_percent")
-hook_bottom_percent = utils.readConfigAndCastInt(config, "hook", "bottom_percent")
-hook_left_percent = utils.readConfigAndCastInt(config, "hook", "left_percent")
-hook_right_percent = utils.readConfigAndCastInt(config, "hook", "right_percent")
+class FishingBot:
+    def __init__(self, config: configparser.ConfigParser, region: Rect) -> None:
+        self.config = config
+        self.region = region
+        self.hook_pos = utils.build_region_from_config(config, "hook", region)
+        self.hook_yellow_range = utils.read_hsv_range(config, "hook", "hook")
+        self.begin_fish_wait_time = utils.read_config_float(config, "time", "begin_fish_wait_time")
+        self.round_end_wait_time = utils.read_config_float(config, "time", "round_end_wait_time")
 
-hook_lower_yellow_hue = utils.readConfigAndCastInt(config, 'hook', 'hook_lower_yellow_hue')
-hook_lower_yellow_saturation = utils.readConfigAndCastInt(config, 'hook', 'hook_lower_yellow_saturation')
-hook_lower_yellow_value = utils.readConfigAndCastInt(config, 'hook', 'hook_lower_yellow_value')
-hook_upper_yellow_hue = utils.readConfigAndCastInt(config, 'hook', 'hook_upper_yellow_hue')
-hook_upper_yellow_saturation = utils.readConfigAndCastInt(config, 'hook', 'hook_upper_yellow_saturation')
-hook_upper_yellow_value = utils.readConfigAndCastInt(config, 'hook', 'hook_upper_yellow_value')
+    def cast_rod(self) -> None:
+        pydirectinput.keyDown("space")
+        time.sleep(CAST_HOLD_SECONDS)
+        pydirectinput.keyUp("space")
+        print(">>> 抛竿完成")
 
-lower_green_hue = utils.readConfigAndCastInt(config, "roi", "lower_green_hue")
-lower_green_saturation = utils.readConfigAndCastInt(config, "roi", "lower_green_saturation")
-lower_green_value = utils.readConfigAndCastInt(config, "roi", "lower_green_value")
-upper_green_hue = utils.readConfigAndCastInt(config, "roi", "upper_green_hue")
-upper_green_saturation = utils.readConfigAndCastInt(config, "roi", "upper_green_saturation")
-upper_green_value = utils.readConfigAndCastInt(config, "roi", "upper_green_value")
-lower_green = np.array([lower_green_hue, lower_green_saturation, lower_green_value])
-upper_green = np.array([upper_green_hue, upper_green_saturation, upper_green_value])
+    def wait_for_bite(self, sct: DxCameraCapture) -> None:
+        print(">>> 等待鱼上钩")
+        wait_start_time = time.time()
+        fail_num = 0
 
-if not region:
-    input(">>> 程序结束，按回车键关闭")
-    exit(1)
-
-hook_pos = (
-    region["left"] + int(region["width"] * hook_left_percent / 100),
-    region["top"] + int(region["height"] * hook_top_percent / 100),
-    region["left"] + int(region["width"] * hook_right_percent / 100),
-    region["top"] + int(region["height"] * hook_bottom_percent / 100),
-)
-
-# ================================== 功能区 ==================================
-
-def cast_rod():
-    pydirectinput.keyDown("space")  # 按下不放
-    time.sleep(0.38)                 # 持续 0.38 秒
-    pydirectinput.keyUp("space")    # 松开
-    print(">>> 抛竿完成")
-
-def wait_for_bite(sct):
-    print(">>> 等待鱼上钩")
-    if not region: return
-    wait_start_time = time.time()
-    wait_end_time = time.time()
-    fail_num = 0
-
-    while True:
-        hook_frame = sct.grab(hook_pos)
-        print(f"hook_pos: {hook_pos}")
-        if hook_frame is None:
-            continue
-        hook_img = np.array(hook_frame)
-        hook_hsv = cv2.cvtColor(hook_img, cv2.COLOR_BGR2HSV)
-        
-        # ori = sct.grab((region["left"], region["top"], region["right"], region["bottom"]))
-        # cv2.imshow("hook", hook_img)
-        # cv2.imshow("ori", ori)
-        # cv2.waitKey(1)
-        
-        hook_yellow = utils.create_color_mask([hook_lower_yellow_hue, hook_lower_yellow_saturation, hook_lower_yellow_value], 
-                                              [hook_upper_yellow_hue, hook_upper_yellow_saturation, hook_upper_yellow_value], 
-                                              hook_hsv, is_dilate=False)
-        hook_yellow_pixel = cv2.countNonZero(hook_yellow)
-        print(f"hook_yellow_pixel: {hook_yellow_pixel}")
-        if hook_yellow_pixel > 8000: 
-            print(">>> 鱼上钩了！") 
-            # 收杆，进入QTE
-            pydirectinput.press("space")
-            return
-
-        # if fail_num > 2:
-        #     print(">>> 背包满了")
-        #     fail_num = 0
-        #     clear_backpack()
-        #     cast_rod()
-        #     continue
-
-        wait_end_time = time.time()
-        # 如果等待时间超过10秒，代表可能有突发情况
-        if wait_end_time - wait_start_time > 15:
-            print(">>> 突发情况")
-            fail_num += 1
-
-            wait_start_time = wait_end_time
-            # 处理切换时间
-            pydirectinput.keyDown("up")  
-            time.sleep(2)
-            pydirectinput.keyUp("up")
-
-            # 点击屏幕
-            # 移动鼠标到窗口中心 (防止点歪)
-            pydirectinput.moveTo(region["left"] + region["width"]//2, region["top"] + region["height"]//2)
-            time.sleep(0.2)
-            # 点击左键
-            pydirectinput.click()
-
-            # 重新抛杆
-            cast_rod()
-            continue   
-    
-def clear_backpack():
-    print(">>> 清理背包")
-    # 打开背包
-    pydirectinput.press("t")
-
-    # 点击一键出售
-    time.sleep(1)
-    one_click_sale_left = int(region["left"] + region["width"] * float(config["backpack"]["one_click_sale_left"]))
-    one_click_sale_top = int(region["top"] + region["height"] * float(config["backpack"]["one_click_sale_top"]))
-    pydirectinput.moveTo(one_click_sale_left, one_click_sale_top)
-    pydirectinput.click()
-
-    # 点击全选
-    time.sleep(1)
-    select_all_left = int(region["left"] + region["width"] * float(config["backpack"]["select_all_left"]))
-    select_all_top = int(region["top"] + region["height"] * float(config["backpack"]["select_all_top"]))
-    pydirectinput.moveTo(select_all_left, select_all_top)
-    pydirectinput.click()
-
-    # 点击打钩按钮
-    circle_check_left = int(region["left"] + region["width"] * float(config["backpack"]["circle_check_left"]))
-    circle_check_top = int(region["top"] + region["height"] * float(config["backpack"]["circle_check_top"]))
-    pydirectinput.moveTo(circle_check_left, circle_check_top)
-    pydirectinput.click()
-
-    # 点击确认按钮
-    time.sleep(0.5)
-    dialog_confirm_left = int(region["left"] + region["width"] * float(config["backpack"]["dialog_confirm_left"]))
-    dialog_confirm_top = int(region["top"] + region["height"] * float(config["backpack"]["dialog_confirm_top"]))
-    pydirectinput.moveTo(dialog_confirm_left, dialog_confirm_top)
-    pydirectinput.click()
-
-    # 退出背包
-    time.sleep(0.5)
-    quit_backpack_left = int(region["left"] + region["width"] * float(config["backpack"]["quit_backpack_left"]))
-    quit_backpack_top = int(region["top"] + region["height"] * float(config["backpack"]["quit_backpack_top"]))
-    pydirectinput.moveTo(quit_backpack_left, quit_backpack_top)
-    pydirectinput.click()
-    time.sleep(0.5)
-
-def main():
-    print("可选钓鱼地点：")
-    for idx, location in enumerate(QTE_STRATEGIES_MAP.keys()):
-        print(f"{idx + 1}: {location}")
-    selected_location = input(">>> 输入数字对应的钓鱼地点：")
-    
-    if (int(selected_location) - 1) in range(len(QTE_STRATEGIES_MAP)):
-        selected_location_name = list(QTE_STRATEGIES_MAP.keys())[int(selected_location) - 1]
-        print(f">>> 你选择了: {selected_location_name}")
-        QTEStrategyClass = QTE_STRATEGIES_MAP[selected_location_name]
-    else:
-        print(">>> 选择无效，默认使用寒霜海峡策略")
-        QTEStrategyClass = strategy.FrostStraitQTEStrategy
-        
-    qte_strategy = QTEStrategyClass(config, region)
-    
-    time.sleep(float(config["time"]["begin_fish_wait_time"]))
-
-    with dxcam.create(output_color="BGR") as sct: 
         while True:
-            # 1. 抛竿
-            cast_rod()
-            
-            # 2. 等待上钩
-            wait_for_bite(sct)
-            
-            # 3. QTE
-            qte_strategy.play_qte(sct, region) 
-            
-            # 4. 结束
-            print("================这轮的钓鱼结束================")
-            time.sleep(float(config["time"]["round_end_wait_time"]))      
+            hook_frame = sct.grab(self.hook_pos)
+            if hook_frame is None:
+                continue
 
-if __name__ == "__main__": 
+            hook_hsv = cv2.cvtColor(hook_frame, cv2.COLOR_BGR2HSV)
+            hook_yellow = utils.create_color_mask(
+                self.hook_yellow_range.lower,
+                self.hook_yellow_range.upper,
+                hook_hsv,
+                is_dilate=False,
+            )
+            hook_yellow_pixel = cv2.countNonZero(hook_yellow)
+            print(f"hook_yellow_pixel: {hook_yellow_pixel}")
+            if hook_yellow_pixel > BITE_PIXEL_THRESHOLD:
+                print(">>> 鱼上钩了！")
+                pydirectinput.press("space")
+                return
+
+            if time.time() - wait_start_time <= BITE_TIMEOUT_SECONDS:
+                continue
+
+            print(">>> 突发情况，尝试恢复钓鱼状态")
+            fail_num += 1
+            wait_start_time = time.time()
+            self.recover_from_timeout()
+
+            # 预留后续做自动清背包或更复杂恢复逻辑
+            if fail_num >= 9999:
+                self.clear_backpack()
+                fail_num = 0
+
+    def recover_from_timeout(self) -> None:
+        pydirectinput.keyDown("up")
+        time.sleep(2)
+        pydirectinput.keyUp("up")
+
+        center_x, center_y = self.region.center
+        pydirectinput.moveTo(center_x, center_y)
+        time.sleep(0.2)
+        pydirectinput.click()
+        self.cast_rod()
+
+    def clear_backpack(self) -> None:
+        print(">>> 清理背包")
+        pydirectinput.press("t")
+        self._click_backpack_button("one_click_sale_left", "one_click_sale_top", delay=1)
+        self._click_backpack_button("select_all_left", "select_all_top", delay=1)
+        self._click_backpack_button("circle_check_left", "circle_check_top")
+        self._click_backpack_button("dialog_confirm_left", "dialog_confirm_top", delay=0.5)
+        self._click_backpack_button("quit_backpack_left", "quit_backpack_top", delay=0.5)
+
+    def _click_backpack_button(self, left_key: str, top_key: str, *, delay: float = 0) -> None:
+        if delay:
+            time.sleep(delay)
+        pos = utils.build_point_from_ratio(
+            self.region,
+            left_ratio=utils.read_config_float(self.config, "backpack", left_key),
+            top_ratio=utils.read_config_float(self.config, "backpack", top_key),
+        )
+        pydirectinput.moveTo(*pos)
+        pydirectinput.click()
+
+    def choose_strategy(self) -> strategy.BaseQTEStrategy:
+        print("可选钓鱼地点：")
+        locations = list(QTE_STRATEGIES_MAP.keys())
+        for idx, location in enumerate(locations, start=1):
+            print(f"{idx}: {location}")
+
+        selected_location = input(">>> 输入数字对应的钓鱼地点：")
+        try:
+            selected_index = int(selected_location) - 1
+        except ValueError:
+            selected_index = -1
+
+        if selected_index in range(len(locations)):
+            selected_name = locations[selected_index]
+            print(f">>> 你选择了: {selected_name}")
+            strategy_class = QTE_STRATEGIES_MAP[selected_name]
+        else:
+            print(">>> 选择无效，默认使用寒霜海峡策略")
+            strategy_class = strategy.FrostStraitQTEStrategy
+
+        return strategy_class(self.config, self.region)
+
+    def run(self) -> None:
+        qte_strategy = self.choose_strategy()
+        time.sleep(self.begin_fish_wait_time)
+
+        with DxCameraCapture(output_color="BGR") as sct:
+            while True:
+                self.cast_rod()
+                self.wait_for_bite(sct)
+                qte_strategy.play_qte(sct)
+                print("================这轮的钓鱼结束================")
+                time.sleep(self.round_end_wait_time)
+
+
+def main() -> None:
+    region = utils.get_window_region(GAME_TITLE)
+    if not region:
+        input(">>> 程序结束，按回车键关闭")
+        raise SystemExit(1)
+
+    config = utils.read_ini()
+    FishingBot(config, region).run()
+
+
+if __name__ == "__main__":
     main()

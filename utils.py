@@ -1,114 +1,211 @@
-import win32gui
+from __future__ import annotations
+
 import configparser
 import os
 import sys
-import numpy as np
-import cv2
-import dxcam
+from dataclasses import dataclass
+from typing import Iterable
 
-def get_window_region(window_title):
-    """
-    根据窗口标题找到窗口的 (left, top, width, height)
-    """
+import cv2
+import numpy as np
+import win32gui
+
+
+@dataclass(frozen=True)
+class Rect:
+    left: int
+    top: int
+    right: int
+    bottom: int
+
+    @property
+    def width(self) -> int:
+        return self.right - self.left
+
+    @property
+    def height(self) -> int:
+        return self.bottom - self.top
+
+    @property
+    def center(self) -> tuple[int, int]:
+        return (self.left + self.width // 2, self.top + self.height // 2)
+
+    def as_tuple(self) -> tuple[int, int, int, int]:
+        return (self.left, self.top, self.right, self.bottom)
+
+
+@dataclass(frozen=True)
+class HSVRange:
+    lower: np.ndarray
+    upper: np.ndarray
+
+
+class DxCameraCapture:
+    """对 dxcam 的轻量封装，统一输出 BGR 图像。"""
+
+    def __init__(self, output_color: str = "BGR") -> None:
+        import dxcam
+
+        self._camera = dxcam.create(output_color=output_color)
+
+    def grab(self, region: Rect | tuple[int, int, int, int]) -> np.ndarray | None:
+        target = region.as_tuple() if isinstance(region, Rect) else region
+        frame = self._camera.grab(region=target)
+        if frame is None:
+            return None
+        if frame.ndim == 3 and frame.shape[2] == 4:
+            return cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        return frame
+
+    def __enter__(self) -> "DxCameraCapture":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        stop = getattr(self._camera, "stop", None)
+        if callable(stop):
+            stop()
+
+
+def get_window_region(window_title: str) -> Rect | None:
+    """根据窗口标题找到窗口区域。"""
     hwnd = win32gui.FindWindow(None, window_title)
     if not hwnd:
         print(f"错误: 未找到标题为 '{window_title}' 的窗口")
         return None
-    
-    # 获取窗口在屏幕上的坐标 (left, top, right, bottom)
-    rect = win32gui.GetWindowRect(hwnd)
-    x, y, right, bottom = rect
-    w = right - x
-    h = bottom - y
-    
-    # 返回 dxcam 需要的字典格式
-    return {'left': x, 'top': y, 'right': right, 'bottom': bottom, 'width': w, 'height': h}
 
-# def to_dxcam_region(region):
-#     """
-#     将 {'left','top','width','height'} 转为 dxcam 使用的 (left, top, right, bottom)
-#     """
-#     return (
-#         region["left"],
-#         region["top"],
-#         region["left"] + region["width"],
-#         region["top"] + region["height"],
-#     )
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    return Rect(left=left, top=top, right=right, bottom=bottom)
 
-# class DxcamCapture:
-#     def __init__(self,):
-#         self._camera = dxcam.create()
 
-#     def grab(self, region):
-#         return self._camera.grab(region=to_dxcam_region(region))
-
-#     def __enter__(self):
-#         return self
-
-#     def __exit__(self, exc_type, exc, tb):
-#         if hasattr(self._camera, "stop"):
-#             try:
-#                 self._camera.stop()
-#             except Exception:
-#                 pass
-
-def get_resource_path(relative_path):
-    """
-    获取资源文件的绝对路径。
-    用于访问打包进 exe 内部的图片资源。
-    """
-    if hasattr(sys, '_MEIPASS'):
-        # PyInstaller 会把资源解压到 sys._MEIPASS 临时目录下
+def get_resource_path(relative_path: str) -> str:
+    """获取资源文件的绝对路径。"""
+    if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative_path)
-    
-    # 普通运行模式，直接返回当前目录下的文件
     return os.path.join(os.path.abspath("."), relative_path)
 
-def read_ini(filename: str = "config.ini"):
-    """
-    从ini文件读取配置文件，自动适配 .py 脚本运行和 .exe 打包运行环境
-    :param filename: 文件名 (例如 "config.ini")
-    :return: config对象
-    """
-    # 1. 获取当前程序的基础路径
-    if getattr(sys, 'frozen', False):
-        # 如果是打包后的 .exe 运行，获取 .exe 所在的目录
+
+def read_ini(filename: str = "config.ini") -> configparser.ConfigParser:
+    """读取 ini 配置文件，不存在时自动写入默认配置。"""
+    if getattr(sys, "frozen", False):
         base_path = os.path.dirname(sys.executable)
     else:
-        # 如果是 .py 脚本运行，获取当前脚本所在的目录
         base_path = os.path.dirname(os.path.abspath(__file__))
 
-    # 2. 将基础路径和文件名拼接成【绝对路径】
     full_path = os.path.join(base_path, filename)
-    
-    print(f">>> 正在读取配置文件路径: {full_path}") 
+    print(f">>> 正在读取配置文件路径: {full_path}")
+
     config = configparser.ConfigParser()
-    
     if not os.path.exists(full_path):
         print(f">>> 配置文件未找到，正在生成默认配置: {full_path}")
-        try:
-            with open(full_path, 'w', encoding='utf-8-sig') as f:
-                f.write(DEFAULT_CONFIG_CONTENT)
-        except Exception as e:
-            print(f">>> 无法写入配置文件: {e}")
-        
+        with open(full_path, "w", encoding="utf-8-sig") as file:
+            file.write(DEFAULT_CONFIG_CONTENT)
+
     config.read(full_path, encoding="utf-8-sig")
     return config
 
-def readConfigAndCastInt(config, item, key):
-    return int(config[item][key])
 
-def create_color_mask(lower_color, upper_color, roi_hsv, is_dilate=True):
+def read_config_int(config: configparser.ConfigParser, section: str, key: str) -> int:
+    return config.getint(section, key)
+
+
+def read_config_float(config: configparser.ConfigParser, section: str, key: str) -> float:
+    return config.getfloat(section, key)
+
+
+def read_hsv_range(config: configparser.ConfigParser, section: str, prefix: str) -> HSVRange:
+    return read_hsv_range_from_keys(
+        config,
+        section,
+        lower_prefix=f"{prefix}_lower",
+        upper_prefix=f"{prefix}_upper",
+    )
+
+
+def read_hsv_range_from_keys(
+    config: configparser.ConfigParser,
+    section: str,
+    *,
+    lower_prefix: str,
+    upper_prefix: str,
+) -> HSVRange:
+    lower = np.array(
+        [
+            read_config_int(config, section, f"{lower_prefix}_hue"),
+            read_config_int(config, section, f"{lower_prefix}_saturation"),
+            read_config_int(config, section, f"{lower_prefix}_value"),
+        ]
+    )
+    upper = np.array(
+        [
+            read_config_int(config, section, f"{upper_prefix}_hue"),
+            read_config_int(config, section, f"{upper_prefix}_saturation"),
+            read_config_int(config, section, f"{upper_prefix}_value"),
+        ]
+    )
+    return HSVRange(lower=lower, upper=upper)
+
+
+def build_region_from_percent(
+    window_region: Rect,
+    *,
+    left_percent: float,
+    top_percent: float,
+    right_percent: float,
+    bottom_percent: float,
+) -> Rect:
+    return Rect(
+        left=window_region.left + int(window_region.width * left_percent / 100),
+        top=window_region.top + int(window_region.height * top_percent / 100),
+        right=window_region.left + int(window_region.width * right_percent / 100),
+        bottom=window_region.top + int(window_region.height * bottom_percent / 100),
+    )
+
+
+def build_region_from_config(
+    config: configparser.ConfigParser,
+    section: str,
+    window_region: Rect,
+    *,
+    prefix: str = "",
+) -> Rect:
+    key_prefix = f"{prefix}_" if prefix else ""
+    return build_region_from_percent(
+        window_region,
+        left_percent=read_config_int(config, section, f"{key_prefix}left_percent"),
+        top_percent=read_config_int(config, section, f"{key_prefix}top_percent"),
+        right_percent=read_config_int(config, section, f"{key_prefix}right_percent"),
+        bottom_percent=read_config_int(config, section, f"{key_prefix}bottom_percent"),
+    )
+
+
+def build_point_from_ratio(
+    window_region: Rect,
+    *,
+    left_ratio: float,
+    top_ratio: float,
+) -> tuple[int, int]:
+    return (
+        int(window_region.left + window_region.width * left_ratio),
+        int(window_region.top + window_region.height * top_ratio),
+    )
+
+
+def create_color_mask(
+    lower_color: Iterable[int] | np.ndarray,
+    upper_color: Iterable[int] | np.ndarray,
+    roi_hsv: np.ndarray,
+    *,
+    is_dilate: bool = True,
+) -> np.ndarray:
     lower = np.array(lower_color)
     upper = np.array(upper_color)
     mask = cv2.inRange(roi_hsv, lower, upper)
     if is_dilate:
-        # 7x7 的卷积核
-        kernel = np.ones((7, 7), np.uint8) 
+        kernel = np.ones((7, 7), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=2)
     return mask
 
-# 默认的配置内容
+
 DEFAULT_CONFIG_CONTENT = """[hook]
 ; 感叹号位置
 top_percent = 31

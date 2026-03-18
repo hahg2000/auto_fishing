@@ -27,6 +27,10 @@ class ActionExecutor:
         self._condition = threading.Condition()
         self._queue: list[ScheduledAction] = []
         self._sequence = 0
+        # 逻辑时间线：只约束“仍在队列中的动作”之间的先后顺序。
+        # 这样 hold 拆分成 key_down/key_up 后，后续 delay=0 的动作仍会排在 key_up 之后，
+        # 但不会被“已经执行完的历史动作”错误地拖到未来。
+        self._timeline_at = 0.0
         self._stop_requested = False
         self._thread = threading.Thread(
             target=self._run,
@@ -42,6 +46,7 @@ class ActionExecutor:
             self._stop_requested = True
             # 清空队列，避免退出后仍执行延迟动作
             self._queue.clear()
+            self._timeline_at = time.monotonic()
             self._condition.notify_all()
         self._thread.join(timeout=1)
         
@@ -49,14 +54,14 @@ class ActionExecutor:
         with self._condition:
             # 清空队列，避免退出后仍执行延迟动作
             self._queue.clear()
+            self._timeline_at = time.monotonic()
             self._condition.notify_all()
-        self._thread.join(timeout=1)
 
     def press(self, key: str, delay: float = 0.0) -> None:
         self._submit("press", (key,), delay)
 
     def hold(self, key: str, duration: float, delay: float = 0.0) -> None:
-        self._submit("hold", (key, duration), delay)
+        self._submit_hold(key, duration, delay)
 
     def click(self, x: int, y: int, delay: float = 0.0) -> None:
         self._submit("click", (x, y), delay)
@@ -69,16 +74,53 @@ class ActionExecutor:
     def _submit(self, kind: str, payload: tuple, delay: float) -> None:
         with self._condition:
             # 使用单调时钟计算执行时间，避免系统时间调整带来的偏差
+            now = time.monotonic()
+            execute_at = max(now + max(delay, 0.0), self._timeline_at)
             action = ScheduledAction(
-                execute_at=time.monotonic() + max(delay, 0.0),
+                execute_at=execute_at,
                 sequence=self._sequence,
                 kind=kind,
                 payload=payload,
             )
             self._sequence += 1
+            self._timeline_at = execute_at
             # 使用堆结构保持队列按 execute_at 自动排序，确保动作按时间执行
             heapq.heappush(self._queue, action)
             self._condition.notify()
+
+    def _submit_hold(self, key: str, duration: float, delay: float) -> None:
+        hold_seconds = max(duration, 0.0)
+        with self._condition:
+            now = time.monotonic()
+            press_at = max(now + max(delay, 0.0), self._timeline_at)
+            release_at = press_at + hold_seconds
+
+            keydown_action = ScheduledAction(
+                execute_at=press_at,
+                sequence=self._sequence,
+                kind="key_down",
+                payload=(key,),
+            )
+            self._sequence += 1
+
+            keyup_action = ScheduledAction(
+                execute_at=release_at,
+                sequence=self._sequence,
+                kind="key_up",
+                payload=(key,),
+            )
+            self._sequence += 1
+
+            self._timeline_at = release_at
+            heapq.heappush(self._queue, keydown_action)
+            heapq.heappush(self._queue, keyup_action)
+            self._condition.notify_all()
+
+    def _refresh_timeline_locked(self) -> None:
+        if not self._queue:
+            self._timeline_at = time.monotonic()
+            return
+        self._timeline_at = max(action.execute_at for action in self._queue)
 
     def _run(self) -> None:
         # 消费线程：按时间顺序执行动作
@@ -101,6 +143,7 @@ class ActionExecutor:
 
                     # 时间到了，取出动作执行
                     action = heapq.heappop(self._queue)
+                    self._refresh_timeline_locked()
                     break
             print(f"执行了{action}")
             self._execute(action)
@@ -111,11 +154,13 @@ class ActionExecutor:
             pydirectinput.press(key)
             return
 
-        if action.kind == "hold":
-            print(f"按住{action.payload}")
-            key, duration = action.payload
+        if action.kind == "key_down":
+            (key,) = action.payload
             pydirectinput.keyDown(key)
-            time.sleep(duration)
+            return
+
+        if action.kind == "key_up":
+            (key,) = action.payload
             pydirectinput.keyUp(key)
             return
 

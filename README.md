@@ -43,13 +43,11 @@ python main.py
 
 ## 使用步骤——exe运行
 
-### 1. 下载exe
+### 1. 下载压缩包
 
-1. 点击 [Actions](https://github.com/hahg2000/auto_fishing/actions)；选择一个最新的工作流；下载 Artifacts 里面的成品
+点击 [Release](https://github.com/hahg2000/auto_fishing/releases)；下载最新的版本里的压缩包制品
 
-2. 点击 [Release](https://github.com/hahg2000/auto_fishing/releases)；下载最新的版本里的exe制品
-
-### 2. 双击运行，并输入钓鱼的地点
+### 2. 双击运行
 
 ### 3. 然后切到游戏窗口
 
@@ -81,7 +79,7 @@ python main.py
   + [ ] 产生有红色数字的泡泡（不知道有什么阻碍
   + [x] 产生隔板来反弹光标行动——不影响所以不处理
 
-- [ ] 引入ocr来判断当前钓鱼地点，来执行不同的钓鱼策略。（如果引入ocr，打包体积会增大。好处是自动识别钓鱼策略和不用触发三次突发时间才清理背包
+- [x] 引入ocr来判断当前钓鱼地点，来执行不同的钓鱼策略。（如果引入ocr，打包体积会增大。好处是自动识别钓鱼策略和不用触发三次突发时间才清理背包
 
 ## 开发指南
 
@@ -90,3 +88,14 @@ python main.py
 1. 在 `qte_strategy.py` 里继承 `BaseQTEStrategy` 类，在 `__init__` 初始化需要使用的变量，然后实现 `play_qte` 方法
 
 2. 在 `main.py` 里的 `QTE_STRATEGIES_MAP` 增加刚新增的策略类
+
+## 所使用的开源库
+
++ [mss](https://github.com/BoboTiG/python-mss/issues) —— —— 窗口截图
++ [dxcam](https://github.com/ra1nty/DXcam) —— 窗口截图
++ [opencv](https://github.com/opencv/opencv) —— 图像操作
++ [onnxruntime](https://github.com/microsoft/onnxruntime)
++ [rapidocr]() —— OCR支持
++ [pydirectinput](https://github.com/learncodebygaming/pydirectinput) —— 模拟操作
++ [pywin32](https://github.com/mhammond/pywin32) —— Windows API
++ [numpy](https://github.com/numpy/numpy)

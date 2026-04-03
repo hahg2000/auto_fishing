@@ -1,53 +1,46 @@
-name: Build EXE Verification
+name: Build Release Package
 
-# 触发条件
 on:
   release:
-    # 当在 GitHub 网页上点击 Publish release 时触发
     types: [published]
-  # 允许在 Actions 页面手动点击 "Run workflow" 测试打包
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest  # 使用 Windows 环境
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
-      # 2. 安装 Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          # 根据实际版本调整
-          python-version: '3.12.4' 
+          python-version: "3.12.4"
 
-      # 3. 安装依赖
-      - name: Install dependencies
+      - name: Install project dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
 
-    # 4. 运行打包命令
-      - name: Build EXE with PyInstaller
+      - name: Build release package
         run: |
-          pyinstaller -F -n BD2_AutoFishing --onefile main.py
+          python build_release.py
 
-    # 5. 上传打包好的 EXE 供下载
-      - name: Upload Artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AutoFisher-Build
-          path: dist/BD2_AutoFishing.exe
+          name: BD2_AutoFishing-windows
+          path: dist/BD2_AutoFishing-windows.zip
+          if-no-files-found: error
 
-    # 自动上传到 Release 资产中
-      - name: Upload to Release
-        # 只有当触发条件是发布 release 或推送 tag 时，才执行发布动作
-        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')
+      - name: Upload zip to Release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/BD2_AutoFishing.exe
+          files: dist/BD2_AutoFishing-windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

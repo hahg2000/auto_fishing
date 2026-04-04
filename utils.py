@@ -10,7 +10,6 @@ import cv2
 import numpy as np
 import win32gui
 
-
 @dataclass(frozen=True)
 class Rect:
     left: int
@@ -193,10 +192,10 @@ def scale_pixel_threshold(
 def build_region_from_percent(
     window_region: Rect,
     *,
-    left_percent: float,
-    top_percent: float,
-    right_percent: float,
-    bottom_percent: float,
+    left_percent: int,
+    top_percent: int,
+    right_percent: int,
+    bottom_percent: int,
 ) -> Rect:
     return Rect(
         left=window_region.left + int(window_region.width * left_percent / 100),
@@ -221,6 +220,7 @@ def build_region_from_config(
         right_percent=read_config_int(config, section, f"{key_prefix}right_percent"),
         bottom_percent=read_config_int(config, section, f"{key_prefix}bottom_percent"),
     )
+
 
 
 def build_point_from_ratio(
@@ -391,6 +391,10 @@ location_left_percent = 11
 location_top_percent = 8
 location_right_percent = 28
 location_bottom_percent = 15
+backpack_full_left_percent = 25
+backpack_full_top_percent = 20
+backpack_full_right_percent = 75
+backpack_full_bottom_percent = 38
 use_cls = false
 ; Leave model paths blank to use RapidOCR package builtin models.
 det_model_path =

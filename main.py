@@ -38,6 +38,14 @@ LOCATION_MATCH_ALIASES: dict[str, tuple[str, ...]] = {
     "亚特兰蒂斯": ("亚特兰蒂斯", "亚特兰蒂", "特兰蒂斯"),
 }
 
+BACKPACK_FULL_MATCH_ALIASES: tuple[str, ...] = (
+    "背包已满，请清理背包",
+    "背包已满请清理背包",
+    "背包已满",
+    "请清理背包",
+    "清理背包",
+)
+
 
 def normalize_ocr_text(text: str) -> str:
     normalized: list[str] = []
@@ -85,6 +93,13 @@ class FishingBot:
             top_key="location_top_percent",
             right_key="location_right_percent",
             bottom_key="location_bottom_percent",
+            fallback_region=Rect(0, 0, 100, 100),
+        )
+        self.backpack_full_ocr_region = self._build_optional_ocr_region(
+            left_key="backpack_full_left_percent",
+            top_key="backpack_full_top_percent",
+            right_key="backpack_full_right_percent",
+            bottom_key="backpack_full_bottom_percent",
             fallback_region=Rect(0, 0, 100, 100),
         )
         self.ocr_engine: RapidOCREngine | None = None
@@ -163,25 +178,42 @@ class FishingBot:
             )
         )
 
-    def _match_location_name(self, texts: list[str]) -> str | None:
-        normalized_candidates = [normalize_ocr_text(text) for text in texts if normalize_ocr_text(text)]
+    def _build_normalized_ocr_candidates(self, texts: list[str]) -> list[str]:
+        normalized_candidates: list[str] = []
+        for text in texts:
+            normalized_text = normalize_ocr_text(text)
+            if normalized_text:
+                normalized_candidates.append(normalized_text)
+
         merged_candidate = normalize_ocr_text("".join(texts))
         if merged_candidate:
             normalized_candidates.append(merged_candidate)
 
-        for location_name, aliases in LOCATION_MATCH_ALIASES.items():
-            normalized_aliases = [normalize_ocr_text(location_name)]
-            normalized_aliases.extend(normalize_ocr_text(alias) for alias in aliases)
+        return normalized_candidates
 
-            for alias in normalized_aliases:
-                if not alias:
-                    continue
-                for candidate in normalized_candidates:
-                    if alias in candidate:
-                        return location_name
-                    if len(candidate) >= 2 and candidate in alias:
-                        return location_name
+    def _has_alias_match(self, normalized_candidates: list[str], aliases: tuple[str, ...]) -> bool:
+        for alias in aliases:
+            normalized_alias = normalize_ocr_text(alias)
+            if not normalized_alias:
+                continue
+            for candidate in normalized_candidates:
+                if normalized_alias in candidate:
+                    return True
+                if len(candidate) >= 2 and candidate in normalized_alias:
+                    return True
+        return False
+
+    def _match_location_name(self, texts: list[str]) -> str | None:
+        normalized_candidates = self._build_normalized_ocr_candidates(texts)
+        for location_name, aliases in LOCATION_MATCH_ALIASES.items():
+            candidate_aliases = (location_name, *aliases)
+            if self._has_alias_match(normalized_candidates, candidate_aliases):
+                return location_name
         return None
+
+    def _contains_backpack_full_text(self, texts: list[str]) -> bool:
+        normalized_candidates = self._build_normalized_ocr_candidates(texts)
+        return self._has_alias_match(normalized_candidates, BACKPACK_FULL_MATCH_ALIASES)
 
     def _detect_location_from_ocr(self, sct: DxCameraCapture) -> str | None:
         if not self.ocr_enabled or not self.auto_select_strategy or self.ocr_engine is None:
@@ -191,9 +223,6 @@ class FishingBot:
         if frame is None:
             print(">>> OCR 截图失败，无法自动选择策略")
             return None
-        
-        # cv2.imshow("OCR Debug - Location Region", frame)
-        # cv2.waitKey(1)
         
         try:
             results = self.ocr_engine.detect_and_recognize(frame)
@@ -223,6 +252,35 @@ class FishingBot:
         pydirectinput.keyUp("space")
         print(">>> 抛竿完成")
 
+    def _check_backpack_if_full(self, sct: DxCameraCapture) -> bool:
+        if not self.ocr_enabled or self.ocr_engine is None:
+            return False
+
+        frame = sct.grab(self.backpack_full_ocr_region)
+        if frame is None:
+            print(">>> 抛竿后 OCR 截图失败，跳过背包检测")
+            return False
+
+        cv2.imshow("Backpack OCR Debug", frame)  # 显示背包检测区域的截图，便于调试
+        cv2.waitKey(1)  # 刷新显示窗口
+        try:
+            results = self.ocr_engine.detect_and_recognize(frame)
+        except Exception as exc:
+            print(f">>> 抛竿后 OCR 执行失败: {exc}")
+            return False
+
+        self._sort_ocr_results(results)
+        texts = [item.text.strip() for item in results if item.text.strip()]
+        if not texts:
+            return False
+
+        print(f">>> 抛竿后 OCR 识别结果: {texts}")
+        if not self._contains_backpack_full_text(texts):
+            return False
+
+        print(">>> 检测到“背包已满，请清理背包”，开始清理背包")
+        return True
+
     def wait_for_bite(self, sct: DxCameraCapture) -> None:
         print(">>> 等待鱼上钩")
         wait_start_time = time.monotonic()
@@ -236,12 +294,10 @@ class FishingBot:
                 wait_start_time = now
                 self.recover_from_timeout()
 
-                # 预留后续做自动清背包或更复杂恢复逻辑
-                if fail_num >= 9999:
-                    self.clear_backpack()
-                    fail_num = 0
-                continue
-
+            if now - wait_start_time < 0.5 and self._check_backpack_if_full(sct):  
+                self.clear_backpack()
+                self.cast_rod()
+                
             hook_frame = sct.grab(self.hook_pos)
             if hook_frame is None:
                 self._sleep_loop()
@@ -276,22 +332,12 @@ class FishingBot:
     def clear_backpack(self) -> None:
         print(">>> 清理背包")
         pydirectinput.press("t")
-        self._click_backpack_button("one_click_sale_left", "one_click_sale_top", delay=1)
-        self._click_backpack_button("select_all_left", "select_all_top", delay=1)
-        self._click_backpack_button("circle_check_left", "circle_check_top")
-        self._click_backpack_button("dialog_confirm_left", "dialog_confirm_top", delay=0.5)
-        self._click_backpack_button("quit_backpack_left", "quit_backpack_top", delay=0.5)
+        utils.click_backpack_button(region=self.region, config=self.config, left_key="one_click_sale_left", top_key="one_click_sale_top", delay=1)
+        utils.click_backpack_button(region=self.region, config=self.config, left_key="select_all_left", top_key="select_all_top", delay=1)
+        utils.click_backpack_button(region=self.region, config=self.config, left_key="circle_check_left", top_key="circle_check_top")
+        utils.click_backpack_button(region=self.region, config=self.config, left_key="dialog_confirm_left", top_key="dialog_confirm_top", delay=0.5)
+        utils.click_backpack_button(region=self.region, config=self.config, left_key="quit_backpack_left", top_key="quit_backpack_top", delay=0.5)
 
-    def _click_backpack_button(self, left_key: str, top_key: str, *, delay: float = 0) -> None:
-        if delay:
-            time.sleep(delay)
-        pos = utils.build_point_from_ratio(
-            self.region,
-            left_ratio=utils.read_config_float(self.config, "backpack", left_key),
-            top_ratio=utils.read_config_float(self.config, "backpack", top_key),
-        )
-        pydirectinput.moveTo(*pos)
-        pydirectinput.click()
 
     def choose_strategy(self, sct: DxCameraCapture) -> strategy.BaseQTEStrategy:
         auto_selected_name = self._detect_location_from_ocr(sct)

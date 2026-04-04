@@ -5,11 +5,12 @@ import os
 import sys
 from dataclasses import dataclass
 from typing import Iterable
+import time
 
 import cv2
 import numpy as np
 import win32gui
-
+import pydirectinput
 
 @dataclass(frozen=True)
 class Rect:
@@ -223,6 +224,18 @@ def build_region_from_config(
     )
 
 
+def click_backpack_button(region: Rect, config: configparser.ConfigParser, left_key: str, top_key: str, *, delay: float = 0) -> None:
+    if delay:
+        time.sleep(delay)
+    pos = build_point_from_ratio(
+        region,
+        left_ratio=read_config_float(config, "backpack", left_key),
+        top_ratio=read_config_float(config, "backpack", top_key),
+    )
+    pydirectinput.moveTo(*pos)
+    pydirectinput.click()
+
+
 def build_point_from_ratio(
     window_region: Rect,
     *,
@@ -391,6 +404,10 @@ location_left_percent = 11
 location_top_percent = 8
 location_right_percent = 28
 location_bottom_percent = 15
+backpack_full_left_percent = 25
+backpack_full_top_percent = 20
+backpack_full_right_percent = 75
+backpack_full_bottom_percent = 38
 use_cls = false
 ; Leave model paths blank to use RapidOCR package builtin models.
 det_model_path =

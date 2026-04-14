@@ -222,7 +222,6 @@ def build_region_from_config(
     )
 
 
-
 def build_point_from_ratio(
     window_region: Rect,
     *,
@@ -359,7 +358,7 @@ dialog_confirm_top = 0.61
 
 ; 退出背包位置
 quit_backpack_left = 0.1
-quit_backpack_top = 0.12
+quit_backpack_top = 0.05
 
 [time]
 ; 一轮钓鱼结束后等待的时间，根据网络情况可以调整
@@ -391,10 +390,10 @@ location_left_percent = 11
 location_top_percent = 8
 location_right_percent = 28
 location_bottom_percent = 15
-backpack_full_left_percent = 25
+backpack_full_left_percent = 30
 backpack_full_top_percent = 20
-backpack_full_right_percent = 75
-backpack_full_bottom_percent = 38
+backpack_full_right_percent = 65
+backpack_full_bottom_percent = 30
 use_cls = false
 ; Leave model paths blank to use RapidOCR package builtin models.
 det_model_path =

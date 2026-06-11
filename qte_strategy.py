@@ -213,7 +213,8 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
                 self._sleep_loop()
                 continue
 
-            roi_hsv, time_hsv = frames
+            time_hsv, qte_hsv = self._split_roi_and_time(frames)
+
             if not self._time_bar_visible(time_hsv):
                 no_bar_frames += 1
                 if self._on_bar_disappeared(no_bar_frames):
@@ -222,13 +223,13 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
                 continue
 
             no_bar_frames = 0
-            cursor_x = self._find_cursor_x(roi_hsv)
+            cursor_x = self._find_cursor_x(qte_hsv)
             if cursor_x is None:
                 self._sleep_loop()
                 continue
 
-            yellow_mask = self._yellow_mask(roi_hsv)
-            blue_mask = utils.create_color_mask(self.blue_range.lower, self.blue_range.upper, roi_hsv)
+            yellow_mask = self._yellow_mask(qte_hsv)
+            blue_mask = utils.create_color_mask(self.blue_range.lower, self.blue_range.upper, qte_hsv)
             check_y = yellow_mask.shape[0] // 2
 
             if cv2.countNonZero(yellow_mask) > self.abyss_yellow_pixel_threshold:

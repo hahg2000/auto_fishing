@@ -85,7 +85,7 @@ def detect_location_from_ocr(sct: DxCameraCapture, ocr_context: OCRContext, auto
         print(">>> OCR 找到了文本但没有匹配的策略")
         return None
 
-    print(f">>> 自动选择策略: {matched_location}")
+    print(f">>> 已检测到地点: {matched_location}")
     return matched_location
 
 

@@ -91,7 +91,7 @@ class FishingBot:
                 operate.recover_from_timeout(self.region)
 
             if now - wait_start_time < 0.5 and ocr_service.check_backpack_if_full(sct, self.ocr_context):  
-                operate.clear_backpack(self.region, self.config)
+                operate.clear_backpack(self.region, self.config, sct, self.ocr_context)
                 operate.cast_rod()
                 
             hook_frame = sct.grab(self.hook_pos)

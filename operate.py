@@ -4,7 +4,7 @@ import configparser
 
 
 import utils
-from ocr.ocr_service import OCRContext, get_change_btn_position, check_if_have_keyword
+from ocr.ocr_service import OCRContext, get_change_btn_position, check_if_have_keyword, detect_location_from_ocr
 from ocr.ocr_enum import FishingLocation
 from ocr.ocr_engine import RapidOCREngine
 from ocr.ocr_utils import build_pos_by_bounds
@@ -15,6 +15,7 @@ CAST_HOLD_SECONDS = 0.38
 CHANGE_LOCATION_POLL_DELAY_SECONDS = 5.0
 CHANGE_LOCATION_POLL_TOTAL_SECONDS = 10
 CHANGE_LOCATION_BTN_NAME = "更改"
+DEFAULT_BACKPACK_BUTTON_CLICK_INTERVAL_SECONDS = 2.0
 
 
 MAP_TRANSITIONS = {
@@ -58,14 +59,57 @@ def recover_from_timeout(region) -> None:
     cast_rod()
     
     
-def clear_backpack(region: Rect, config: configparser.ConfigParser) -> None:
+def clear_backpack(
+    region: Rect,
+    config: configparser.ConfigParser,
+    sct: DxCameraCapture | None = None,
+    ocr_context: OCRContext | None = None,
+) -> None:
     print(">>> 清理背包")
-    pydirectinput.press("t")
-    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "one_click_sale_left"), top_ratio=utils.read_config_float(config, "backpack", "one_click_sale_top"), delay=1)
-    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "select_all_left"), top_ratio=utils.read_config_float(config, "backpack", "select_all_top"), delay=1)
-    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "circle_check_left"), top_ratio=utils.read_config_float(config, "backpack", "circle_check_top"))
-    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "dialog_confirm_left"), top_ratio=utils.read_config_float(config, "backpack", "dialog_confirm_top"), delay=0.5)
-    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "quit_backpack_left"), top_ratio=utils.read_config_float(config, "backpack", "quit_backpack_top"), delay=0.5) 
+    button_click_interval = _click_clear_backpack_buttons(region, config)
+    if not _should_retry_clear_backpack(sct, ocr_context, button_click_interval):
+        return
+
+    print(">>> 清理背包后未检测到钓鱼地点，再次清理背包")
+    _click_clear_backpack_buttons(region, config, open_backpack=False)
+
+
+def _click_clear_backpack_buttons(
+    region: Rect,
+    config: configparser.ConfigParser,
+    *,
+    open_backpack: bool = True,
+) -> float:
+    button_click_interval = config.getfloat(
+        "backpack",
+        "button_click_interval_seconds",
+        fallback=DEFAULT_BACKPACK_BUTTON_CLICK_INTERVAL_SECONDS,
+    )
+    if open_backpack:
+        pydirectinput.press("t")
+    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "one_click_sale_left"), top_ratio=utils.read_config_float(config, "backpack", "one_click_sale_top"), delay=button_click_interval)
+    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "select_all_left"), top_ratio=utils.read_config_float(config, "backpack", "select_all_top"), delay=button_click_interval)
+    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "circle_check_left"), top_ratio=utils.read_config_float(config, "backpack", "circle_check_top"), delay=button_click_interval)
+    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "dialog_confirm_left"), top_ratio=utils.read_config_float(config, "backpack", "dialog_confirm_top"), delay=button_click_interval)
+    click_button(region=region, left_ratio=utils.read_config_float(config, "backpack", "quit_backpack_left"), top_ratio=utils.read_config_float(config, "backpack", "quit_backpack_top"), delay=button_click_interval) 
+    return button_click_interval
+
+
+def _should_retry_clear_backpack(
+    sct: DxCameraCapture | None,
+    ocr_context: OCRContext | None,
+    check_delay: float,
+) -> bool:
+    if sct is None or ocr_context is None:
+        return False
+
+    if not ocr_context.enabled or ocr_context.engine is None:
+        return False
+
+    if check_delay:
+        time.sleep(check_delay)
+
+    return detect_location_from_ocr(sct, ocr_context, auto_select_strategy=True) is None
     
     
 def click_button(region: Rect, left_ratio: float, top_ratio: float, *, delay: float = 0) -> None:

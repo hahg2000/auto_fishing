@@ -24,6 +24,11 @@ class BaseQTEStrategy:
             "loop_sleep_seconds",
             fallback=DEFAULT_LOOP_SLEEP_SECONDS,
         )
+        self.press_offset_pixels = config.getint(
+            "roi",
+            "qte_press_offset_pixels",
+            fallback=0,
+        )
         self.time_bar_score_threshold = utils.scale_pixel_threshold(
             50,
             self.pixel_threshold_scale,
@@ -68,7 +73,8 @@ class BaseQTEStrategy:
             ">>> QTE 像素阈值: "
             f"time_bar_score={self.time_bar_score_threshold}, "
             f"ice_trouble={self.ice_trouble_pixel_threshold}, "
-            f"abyss_yellow={self.abyss_yellow_pixel_threshold}"
+            f"abyss_yellow={self.abyss_yellow_pixel_threshold}, "
+            f"press_offset={self.press_offset_pixels}px"
         )
 
     def play_qte(self, sct: utils.DxCameraCapture) -> None:
@@ -123,6 +129,10 @@ class BaseQTEStrategy:
         if np.max(col_sums) <= 0:
             return None
         return int(np.argmax(col_sums))
+
+    def _get_press_check_x(self, cursor_x: int, mask_width: int) -> int:
+        offset_x = cursor_x + self.press_offset_pixels
+        return max(0, min(offset_x, mask_width - 1))
 
     def _finish_fishing(self) -> None:
         time.sleep(self.fish_end_wait_time)
@@ -183,7 +193,8 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
             mask_yellow = self._yellow_mask(qte_hsv)
             
             check_y = mask_yellow.shape[0] // 2
-            if mask_yellow[check_y, cursor_x]:
+            check_x = self._get_press_check_x(cursor_x, mask_yellow.shape[1])
+            if mask_yellow[check_y, check_x]:
                 pydirectinput.press("space")
                 pass
             self._sleep_loop()
@@ -231,10 +242,11 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
             yellow_mask = self._yellow_mask(qte_hsv)
             blue_mask = utils.create_color_mask(self.blue_range.lower, self.blue_range.upper, qte_hsv)
             check_y = yellow_mask.shape[0] // 2
+            check_x = self._get_press_check_x(cursor_x, yellow_mask.shape[1])
 
             if cv2.countNonZero(yellow_mask) > self.abyss_yellow_pixel_threshold:
-                if yellow_mask[check_y, cursor_x]:
+                if yellow_mask[check_y, check_x]:
                     pydirectinput.press("space")
-            elif blue_mask[check_y, cursor_x]:
+            elif blue_mask[check_y, check_x]:
                 pydirectinput.press("space")
             self._sleep_loop()

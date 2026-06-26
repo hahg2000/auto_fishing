@@ -61,6 +61,11 @@ class FishingBot:
             "auto_select_strategy",
             fallback=True,
         )
+        self.change_location_on_missing_time = config.getboolean(
+            "ocr",
+            "change_location_on_missing_time",
+            fallback=False,
+        )
         self.change_location_keyword = config.get("ocr", "change_location_keyword", fallback="小时").strip()
 
         print(f">>> 当前游戏窗口截图尺寸: {region.width} x {region.height}")
@@ -145,12 +150,17 @@ class FishingBot:
 
         return strategy_class(self.config, self.region)
 
+    def should_change_location(self, sct: DxCameraCapture) -> bool:
+        if not self.change_location_on_missing_time:
+            return False
+        return ocr_service.check_if_time_to_change_location(sct, self.ocr_context)
+
     def run(self) -> None:
         with DxCameraCapture(output_color="BGR") as sct:
             qte_strategy = self.choose_strategy(sct)
             time.sleep(self.begin_fish_wait_time)
             while True:
-                if ocr_service.check_if_time_to_change_location(sct, self.ocr_context):
+                if self.should_change_location(sct):
                     operate.change_location(sct, self.ocr_context, self.selected_location_name)
                     
                 operate.cast_rod()

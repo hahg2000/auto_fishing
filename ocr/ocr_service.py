@@ -119,7 +119,7 @@ def check_if_have_keyword(sct: DxCameraCapture, ocr_context: OCRContext, keyword
 
 
 def check_if_time_to_change_location(sct: DxCameraCapture, ocr_context: OCRContext) -> bool:
-    if check_if_have_keyword(sct, ocr_context, "小时"):
+    if check_if_have_keyword(sct, ocr_context, "时"):
         return False
     
     print(">>> OCR 没有检测到“时”字，可能需要切换钓鱼点")

@@ -1,5 +1,8 @@
 dxcam_sync/
+debug/
 dist/
 build/
 *.spec
 *.pyc
+tests/
+auto_fishing/

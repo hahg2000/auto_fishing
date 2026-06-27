@@ -1,3 +1,5 @@
+"""OCR 业务服务：截图识别地点、背包提示、地图按钮和换点条件。"""
+
 import time
 
 from utils import DxCameraCapture, Rect
@@ -14,6 +16,7 @@ def get_result_from_ocr(
     ocr_engine: RapidOCREngine | None,
     ocr_region: Rect,
 ) -> list[OCRText] | None:
+    """截取指定区域并执行 OCR；不可用或失败时统一返回 ``None``。"""
     if ocr_engine is None:
         return None
 
@@ -24,8 +27,6 @@ def get_result_from_ocr(
     
     try:
         results = ocr_engine.detect_and_recognize(frame)
-        # 输出 OCR 结果
-        # print(f">>> OCR 识别结果: {[item.text for item in results]}")
         return results
     except Exception as exc:
         print(f">>> OCR 执行失败: {exc}")
@@ -33,6 +34,7 @@ def get_result_from_ocr(
 
 
 def get_result_by_keyword(sct: DxCameraCapture, ocr_engine: RapidOCREngine | None, ocr_region: Rect, keyword: str) -> OCRText | None:
+    """返回文本完全等于关键词的首个 OCR 结果。"""
     results = get_result_from_ocr(sct, ocr_engine, ocr_region)
     
     if results is None:
@@ -50,6 +52,7 @@ def get_texts_from_ocr(
     ocr_engine: RapidOCREngine | None,
     ocr_region: Rect,
 ) -> list[str] | None:
+    """按画面从上到下、从左到右排序并提取非空文本。"""
     results = get_result_from_ocr(sct, ocr_engine, ocr_region)
     
     if results is None:
@@ -59,7 +62,8 @@ def get_texts_from_ocr(
     return texts
 
 
-def get_change_btn_position(sct: DxCameraCapture, ocr_context: OCRContext, change_location_keyword: str) -> OCRText  | None:
+def get_change_btn_position(sct: DxCameraCapture, ocr_context: OCRContext, change_location_keyword: str) -> OCRText | None:
+    """在限定时间内轮询地图的“更改”按钮位置。"""
     now = time.monotonic()
     while time.monotonic() - now < CHANGE_LOCATION_POLL_TOTAL_SECONDS:
         result = get_result_by_keyword(sct, ocr_context.engine, ocr_context.regions.location, change_location_keyword)
@@ -72,6 +76,7 @@ def get_change_btn_position(sct: DxCameraCapture, ocr_context: OCRContext, chang
 
 
 def detect_location_from_ocr(sct: DxCameraCapture, ocr_context: OCRContext, auto_select_strategy: bool) -> FishingLocation | None:
+    """识别左上角地点文字，并映射到支持的地点枚举。"""
     if not ocr_context.enabled or not auto_select_strategy:
         return None
     
@@ -90,6 +95,7 @@ def detect_location_from_ocr(sct: DxCameraCapture, ocr_context: OCRContext, auto
 
 
 def check_backpack_if_full(sct: DxCameraCapture, ocr_context: OCRContext) -> bool:
+    """识别背包已满提示；OCR 关闭时直接视为未满。"""
     if not ocr_context.enabled or ocr_context.engine is None:
         return False
 
@@ -105,6 +111,7 @@ def check_backpack_if_full(sct: DxCameraCapture, ocr_context: OCRContext) -> boo
 
 
 def check_if_have_keyword(sct: DxCameraCapture, ocr_context: OCRContext, keyword: str) -> bool:
+    """检查地图 OCR 文本中是否包含指定关键词。"""
     if not ocr_context.enabled or ocr_context.engine is None:
         return False
     
@@ -119,6 +126,7 @@ def check_if_have_keyword(sct: DxCameraCapture, ocr_context: OCRContext, keyword
 
 
 def check_if_time_to_change_location(sct: DxCameraCapture, ocr_context: OCRContext) -> bool:
+    """把地图时间文字中的“时”缺失作为需要刷新钓点的信号。"""
     if check_if_have_keyword(sct, ocr_context, "时"):
         return False
     

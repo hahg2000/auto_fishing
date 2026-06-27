@@ -1,3 +1,5 @@
+"""OCR 配置、区域构建、文本归一化与容错匹配工具。"""
+
 import unicodedata
 import utils
 import os
@@ -11,6 +13,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class OCRRegions:
+    """OCR 各业务场景对应的屏幕绝对区域。"""
+
     location: Rect
     map: Rect
     backpack_full: Rect
@@ -18,12 +22,15 @@ class OCRRegions:
 
 @dataclass(frozen=True)
 class OCRContext:
+    """把 OCR 开关、引擎和区域集中传递给业务流程。"""
+
     enabled: bool
     engine: RapidOCREngine | None
     regions: OCRRegions
 
 
 def normalize_ocr_text(text: str) -> str:
+    """移除空白、标点和符号并统一大小写，降低界面排版对匹配的影响。"""
     normalized: list[str] = []
     for char in text:
         if char.isspace():
@@ -36,6 +43,7 @@ def normalize_ocr_text(text: str) -> str:
 
 
 def build_normalized_ocr_candidates(texts: list[str]) -> list[str]:
+    """同时生成单段和拼接文本候选，兼容一句话被 OCR 拆成多个框。"""
     normalized_candidates: list[str] = []
     for text in texts:
         normalized_text = normalize_ocr_text(text)
@@ -50,6 +58,7 @@ def build_normalized_ocr_candidates(texts: list[str]) -> list[str]:
   
     
 def has_alias_match(normalized_candidates: list[str], aliases: tuple[str, ...]) -> bool:
+    """使用别名包含关系容忍 OCR 少字或文本被截断。"""
     for alias in aliases:
         normalized_alias = normalize_ocr_text(alias)
         if not normalized_alias:
@@ -63,6 +72,7 @@ def has_alias_match(normalized_candidates: list[str], aliases: tuple[str, ...]) 
 
     
 def sort_ocr_results(results: list) -> None:
+    """按文本框的纵坐标、横坐标排序，使拼接顺序接近视觉阅读顺序。"""
     results.sort(
         key=lambda item: (
             item.box.bounds[1] if item.box is not None else 0,
@@ -72,6 +82,7 @@ def sort_ocr_results(results: list) -> None:
 
     
 def match_location_name(texts: list[str]) -> FishingLocation | None:
+    """把 OCR 文本按地点别名映射到地点枚举。"""
     normalized_candidates = build_normalized_ocr_candidates(texts)
     for location_name, aliases in LOCATION_MATCH_ALIASES.items():
         candidate_aliases = (location_name.value, *aliases)
@@ -81,11 +92,13 @@ def match_location_name(texts: list[str]) -> FishingLocation | None:
 
 
 def contains_backpack_full_text(texts: list[str]) -> bool:
+    """判断 OCR 文本是否包含任一背包已满提示变体。"""
     normalized_candidates = build_normalized_ocr_candidates(texts)
     return has_alias_match(normalized_candidates, BACKPACK_FULL_MATCH_ALIASES)
 
 
 def resolve_ocr_resource_path(config: configparser.ConfigParser, key: str) -> str | None:
+    """解析开发环境和 PyInstaller 环境下均可访问的 OCR 资源路径。"""
     configured_value = config.get("ocr", key, fallback="").strip()
     if not configured_value:
         return None
@@ -98,6 +111,7 @@ def resolve_ocr_resource_path(config: configparser.ConfigParser, key: str) -> st
 
 
 def build_ocr_engine(config: configparser.ConfigParser) -> RapidOCREngine:
+    """从配置读取可选模型路径并创建 RapidOCR 适配器。"""
     det_model_path = resolve_ocr_resource_path(config, "det_model_path")
     cls_model_path = resolve_ocr_resource_path(config, "cls_model_path")
     rec_model_path = resolve_ocr_resource_path(config, "rec_model_path")
@@ -120,6 +134,7 @@ def build_optional_ocr_region(
     right_key: str,
     bottom_key: str,
 ) -> Rect:
+    """构建可选 OCR 区域；缺少任一边界配置时回退到完整游戏窗口。"""
     if not all(
         config.has_option("ocr", key)
         for key in (left_key, top_key, right_key, bottom_key)
@@ -143,6 +158,7 @@ def build_optional_ocr_region(
     
 
 def build_ocr_context(config: configparser.ConfigParser, region: Rect) -> OCRContext:
+    """创建全部 OCR 区域，并在引擎初始化失败时自动关闭 OCR。"""
     ocr_regions = OCRRegions(
         build_optional_ocr_region(
             config,
@@ -185,6 +201,7 @@ def build_ocr_context(config: configparser.ConfigParser, region: Rect) -> OCRCon
 
 
 def build_pos_by_bounds(bounds, region: Rect):
+    """将 OCR 局部文本框中心换算为屏幕绝对点击坐标。"""
     left, top, right, bottom = bounds
 
     abs_center_x = region.left + (left + right) // 2

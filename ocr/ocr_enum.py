@@ -1,3 +1,5 @@
+"""集中定义钓鱼地点以及 OCR 容错匹配所需的文字别名。"""
+
 from __future__ import annotations
 
 from enum import StrEnum
@@ -5,6 +7,8 @@ from typing import Final
 
 
 class FishingLocation(StrEnum):
+    """游戏内支持的钓鱼地点；枚举值与界面中文名称一致。"""
+
     YANBO_LAKE = "烟波湖"
     SHALLOW_SHORE = "浅岸"
     FROST_STRAIT = "寒霜海峡"
@@ -29,4 +33,3 @@ BACKPACK_FULL_MATCH_ALIASES: tuple[str, ...] = (
     "请清理背包",
     "清理背包",
 )
-

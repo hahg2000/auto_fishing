@@ -1,3 +1,5 @@
+"""自动钓鱼主流程：检测上钩提示、选择 QTE 策略并串联每轮操作。"""
+
 from __future__ import annotations
 
 import configparser
@@ -16,11 +18,12 @@ import ocr.ocr_service as ocr_service
 from ocr.ocr_enum import DEFAULT_LOCATION, FishingLocation
 from utils import DxCameraCapture, Rect
 
+# 让 Windows 返回真实像素坐标，避免系统缩放导致截图区域和点击位置错位。
 ctypes.windll.user32.SetProcessDPIAware()
 GAME_TITLE = "BrownDust II"
 BITE_PIXEL_THRESHOLD = 250
 BITE_TIMEOUT_SECONDS = 15
-DEFAULT_LOOP_SLEEP_SECONDS = 0.005
+DEFAULT_LOOP_SLEEP_SECONDS = 0.02
 
 QTE_STRATEGIES_MAP: dict[FishingLocation, Type[strategy.BaseQTEStrategy]] = {
     FishingLocation.YANBO_LAKE: strategy.FrostStraitQTEStrategy,
@@ -32,6 +35,8 @@ QTE_STRATEGIES_MAP: dict[FishingLocation, Type[strategy.BaseQTEStrategy]] = {
 
 
 class FishingBot:
+    """维护钓鱼循环所需状态，并协调截图、OCR、输入操作和 QTE 策略。"""
+
     def __init__(self, config: configparser.ConfigParser, region: Rect, ocr_context: ocr_service.OCRContext) -> None:
         self.config = config
         self.region = region
@@ -66,13 +71,13 @@ class FishingBot:
             "change_location_on_missing_time",
             fallback=False,
         )
-        self.change_location_keyword = config.get("ocr", "change_location_keyword", fallback="小时").strip()
+        self.change_location_keyword = config.get("ocr", "change_location_keyword", fallback="时").strip()
 
         print(f">>> 当前游戏窗口截图尺寸: {region.width} x {region.height}")
         print(
             ">>> 像素阈值缩放倍率: "
             f"{self.pixel_threshold_scale.factor:.4f} "
-            f"(参考窗口: {self.pixel_threshold_scale.reference_width} x "
+            f"(参考窗口 {self.pixel_threshold_scale.reference_width} x "
             f"{self.pixel_threshold_scale.reference_height})"
         )
         print(f">>> 上钩黄色像素阈值: {BITE_PIXEL_THRESHOLD} -> {self.bite_pixel_threshold}")
@@ -83,6 +88,7 @@ class FishingBot:
 
 
     def wait_for_bite(self, sct: DxCameraCapture) -> None:
+        """轮询感叹号区域，检测到足够多黄色像素后按空格进入 QTE。"""
         print(">>> 等待鱼上钩")
         wait_start_time = time.monotonic()
         fail_num = 0
@@ -95,7 +101,9 @@ class FishingBot:
                 wait_start_time = now
                 operate.recover_from_timeout(self.region)
 
+            # 背包已满提示只会在抛竿后的短时间出现，无需整轮持续运行 OCR。
             if now - wait_start_time < 0.5 and ocr_service.check_backpack_if_full(sct, self.ocr_context):  
+                wait_start_time = now
                 operate.clear_backpack(self.region, self.config, sct, self.ocr_context)
                 operate.cast_rod()
                 
@@ -112,8 +120,9 @@ class FishingBot:
                 is_dilate=False,
             )
             hook_yellow_pixel = cv2.countNonZero(hook_yellow)
+            bite_detected = hook_yellow_pixel > self.bite_pixel_threshold
 
-            if hook_yellow_pixel > self.bite_pixel_threshold:
+            if bite_detected:
                 print(">>> 鱼上钩了！")
                 pydirectinput.press("space")
                 return 
@@ -121,18 +130,19 @@ class FishingBot:
 
 
     def choose_strategy(self, sct: DxCameraCapture) -> strategy.BaseQTEStrategy:
+        """优先通过地点 OCR 自动选择策略，失败时再让用户手动选择。"""
         auto_selected_name = ocr_service.detect_location_from_ocr(sct, self.ocr_context, self.auto_select_strategy)
         if auto_selected_name is not None:
             strategy_class = QTE_STRATEGIES_MAP[auto_selected_name]
             self.selected_location_name = auto_selected_name
             return strategy_class(self.config, self.region)
 
-        print("可选钓鱼地点：")
+        print("可选钓鱼地点: ")
         locations = list(QTE_STRATEGIES_MAP.keys())
         for idx, location in enumerate(locations, start=1):
             print(f"{idx}: {location.value}")
 
-        selected_location = input(">>> 输入数字对应的钓鱼地点：")
+        selected_location = input(">>> 输入数字对应的钓鱼地点: ")
         try:
             selected_index = int(selected_location) - 1
         except ValueError:
@@ -151,11 +161,13 @@ class FishingBot:
         return strategy_class(self.config, self.region)
 
     def should_change_location(self, sct: DxCameraCapture) -> bool:
+        """按配置决定是否通过时间文字缺失来触发换点。"""
         if not self.change_location_on_missing_time:
             return False
         return ocr_service.check_if_time_to_change_location(sct, self.ocr_context)
 
     def run(self) -> None:
+        """持续执行换点检查、抛竿、上钩检测和 QTE。"""
         with DxCameraCapture(output_color="BGR") as sct:
             qte_strategy = self.choose_strategy(sct)
             time.sleep(self.begin_fish_wait_time)
@@ -171,6 +183,7 @@ class FishingBot:
 
 
 def main() -> None:
+    """定位游戏客户区并创建运行所需的配置与 OCR 上下文。"""
     region = utils.get_window_region(GAME_TITLE)
     if not region:
         input(">>> 程序结束，按回车键关闭")

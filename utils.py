@@ -1,3 +1,5 @@
+"""项目通用基础设施：坐标、截图、配置读取、颜色遮罩和阈值缩放。"""
+
 from __future__ import annotations
 
 import configparser
@@ -12,6 +14,8 @@ import win32gui
 
 @dataclass(frozen=True)
 class Rect:
+    """使用屏幕绝对坐标表示的左闭右开矩形区域。"""
+
     left: int
     top: int
     right: int
@@ -35,19 +39,34 @@ class Rect:
 
 @dataclass(frozen=True)
 class HSVRange:
+    """OpenCV HSV 颜色范围的上下界。"""
+
     lower: np.ndarray
     upper: np.ndarray
 
 
 @dataclass(frozen=True)
 class PixelThresholdScale:
+    """按当前窗口面积相对参考分辨率缩放像素数量阈值。"""
+
     reference_width: int
     reference_height: int
     current_width: int
     current_height: int
 
     @property
+    def width_factor(self) -> float:
+        """返回当前窗口宽度相对参考窗口宽度的倍率。"""
+        return self.current_width / max(1, self.reference_width)
+
+    @property
+    def height_factor(self) -> float:
+        """返回当前窗口高度相对参考窗口高度的倍率。"""
+        return self.current_height / max(1, self.reference_height)
+
+    @property
     def factor(self) -> float:
+        """返回当前窗口面积与参考窗口面积之比。"""
         reference_area = max(1, self.reference_width * self.reference_height)
         current_area = max(1, self.current_width * self.current_height)
         return current_area / reference_area
@@ -80,6 +99,7 @@ class DxCameraCapture:
 
 
 def get_window_region(window_title: str) -> Rect | None:
+    """获取窗口客户区的屏幕绝对坐标，不包含标题栏和边框。"""
     hwnd = win32gui.FindWindow(None, window_title)
     if not hwnd:
         print(f"错误: 未找到标题为 '{window_title}' 的窗口")
@@ -134,6 +154,7 @@ def read_config_float(config: configparser.ConfigParser, section: str, key: str)
 
 
 def read_hsv_range(config: configparser.ConfigParser, section: str, prefix: str) -> HSVRange:
+    """按 ``<prefix>_lower/upper_*`` 命名约定读取 HSV 范围。"""
     return read_hsv_range_from_keys(
         config,
         section,
@@ -149,6 +170,7 @@ def read_hsv_range_from_keys(
     lower_prefix: str,
     upper_prefix: str,
 ) -> HSVRange:
+    """使用分别指定的上下界前缀读取 HSV 范围。"""
     lower = np.array(
         [
             read_config_int(config, section, f"{lower_prefix}_hue"),
@@ -170,6 +192,7 @@ def build_pixel_threshold_scale(
     config: configparser.ConfigParser,
     region: Rect,
 ) -> PixelThresholdScale:
+    """根据游戏窗口和配置中的参考分辨率创建阈值缩放信息。"""
     reference_width = config.getint("scale", "reference_window_width", fallback=3840)
     reference_height = config.getint("scale", "reference_window_height", fallback=2160)
     return PixelThresholdScale(
@@ -186,7 +209,18 @@ def scale_pixel_threshold(
     *,
     minimum: int = 1,
 ) -> int:
+    """按窗口面积缩放像素阈值，并保证结果不低于最小值。"""
     return max(minimum, int(round(base_threshold * scale.factor)))
+
+
+def scale_pixel_length(
+    base_length: int,
+    factor: float,
+    *,
+    minimum: int = 0,
+) -> int:
+    """按单一方向的缩放倍率换算像素长度。"""
+    return max(minimum, int(round(base_length * factor)))
 
 
 def build_region_from_percent(
@@ -197,6 +231,7 @@ def build_region_from_percent(
     right_percent: int,
     bottom_percent: int,
 ) -> Rect:
+    """把窗口内百分比区域转换成屏幕绝对坐标。"""
     return Rect(
         left=window_region.left + int(window_region.width * left_percent / 100),
         top=window_region.top + int(window_region.height * top_percent / 100),
@@ -212,6 +247,7 @@ def build_region_from_config(
     *,
     prefix: str = "",
 ) -> Rect:
+    """从配置节读取百分比区域；可用前缀区分同节中的多个区域。"""
     key_prefix = f"{prefix}_" if prefix else ""
     return build_region_from_percent(
         window_region,
@@ -228,6 +264,7 @@ def build_point_from_ratio(
     left_ratio: float,
     top_ratio: float,
 ) -> tuple[int, int]:
+    """把区域内的横纵比例转换成屏幕绝对点击坐标。"""
     return (
         int(window_region.left + window_region.width * left_ratio),
         int(window_region.top + window_region.height * top_ratio),
@@ -240,13 +277,17 @@ def create_color_mask(
     roi_hsv: np.ndarray,
     *,
     is_dilate: bool = True,
+    dilate_kernel_size: tuple[int, int] = (7, 7),
+    dilate_iterations: int = 2,
 ) -> np.ndarray:
+    """创建 HSV 二值遮罩，并按需膨胀以连接断裂或被遮挡的颜色区域。"""
     lower = np.array(lower_color)
     upper = np.array(upper_color)
     mask = cv2.inRange(roi_hsv, lower, upper)
     if is_dilate:
-        kernel = np.ones((7, 7), np.uint8)
-        mask = cv2.dilate(mask, kernel, iterations=2)
+        # NumPy 核尺寸顺序为（高度, 宽度），迭代次数越多扩张范围越大。
+        kernel = np.ones(dilate_kernel_size, np.uint8)
+        mask = cv2.dilate(mask, kernel, iterations=dilate_iterations)
     return mask
 
 
@@ -265,25 +306,25 @@ hook_upper_saturation = 120
 hook_upper_value = 255
 
 [roi]
-; qte位置
-top_percent = 80
+; QTE 整体截图区域
+top_percent = 82
 bottom_percent = 90
 left_percent = 32
 right_percent = 65
 
-; 倒计时位置
+; 倒计时条在整体截图中的相对区域
 time_top_percent = 0
 time_bottom_percent = 100
 time_left_percent = 0
 time_right_percent = 18
 
-; 倒计时位置
+; QTE 条在整体截图中的相对区域
 qte_top_percent = 50
 qte_bottom_percent = 97
 qte_left_percent = 22
 qte_right_percent = 100
 
-; QTE 按键判定横向偏移（像素），正数向右，负数向左
+; QTE 按键判定横向偏移（像素），正数向右、负数向左；是否提前取决于光标移动方向
 qte_press_offset_pixels = 0
 
 ; 倒计时绿色颜色区间
@@ -304,8 +345,8 @@ time_upper_red_value = 255
 
 ; 黄色颜色区间
 yellow_lower_hue = 20
-yellow_lower_saturation = 100
-yellow_lower_value = 185
+yellow_lower_saturation = 125
+yellow_lower_value = 220
 yellow_upper_hue = 30
 yellow_upper_saturation = 255
 yellow_upper_value = 255
@@ -317,14 +358,6 @@ red_lower_value = 100
 red_upper_hue = 180
 red_upper_saturation = 255
 red_upper_value = 255
-
-; 绿色颜色区间
-green_lower_hue = 59
-green_lower_saturation = 95
-green_lower_value = 209
-green_upper_hue = 75
-green_upper_saturation = 163
-green_upper_value = 234
 
 ; 蓝色颜色区间
 blue_lower_hue = 95
@@ -339,8 +372,30 @@ white_lower_hue = 0
 white_lower_saturation = 0
 white_lower_value = 240
 white_upper_hue = 180
-white_upper_saturation = 50
+white_upper_saturation = 10
 white_upper_value = 255
+
+; 挡板第一个颜色区间
+blocker_one_lower_hue = 0
+blocker_one_lower_saturation = 25
+blocker_one_lower_value = 230
+blocker_one_upper_hue = 180
+blocker_one_upper_saturation = 52
+blocker_one_upper_value = 255
+
+; 挡板第二个颜色区间
+blocker_two_lower_hue = 0
+blocker_two_lower_saturation = 0
+blocker_two_lower_value = 200
+blocker_two_upper_hue = 180
+blocker_two_upper_saturation = 10
+blocker_two_upper_value = 245
+
+; 参考分辨率下的挡板轮廓宽高限制（像素，判断时不包含上下限）
+blocker_shape_min_width = 4
+blocker_shape_max_width = 20
+blocker_shape_min_height = 18
+blocker_shape_max_height = 100
 
 [backpack]
 ; 背包清理流程中，每次点击按钮前等待的秒数
@@ -368,16 +423,16 @@ quit_backpack_top = 0.05
 
 [time]
 ; 一轮钓鱼结束后等待的时间，根据网络情况可以调整
-round_end_wait_time = 2
+round_end_wait_time = 4
 
 ; 钓鱼成功后的停留时间，来等待动画效果结束，根据电脑情况可以调整
-fish_end_wait_time = 2
+fish_end_wait_time = 4
 
 ; 执行脚本后的停留时间，来预留时间能切换到游戏界面
-begin_fish_wait_time = 3
+begin_fish_wait_time = 4
 
 ; 热循环的轻量节流时间，减轻 CPU 占用
-loop_sleep_seconds = 0.005
+loop_sleep_seconds = 0.02
 
 ; 钓鱼的最长持续时间，用于防止错误一直退出不了qte时刻
 longest_keep_time = 35
@@ -388,10 +443,14 @@ reference_window_width = 1152
 reference_window_height = 648
 
 [ocr]
-; Enable OCR to run once after startup for debugging the target text area.
+; 程序启动时是否执行一次 OCR 目标区域调试
 enabled = true
 debug_once_on_start = true
 auto_select_strategy = true
+
+; OCR 未识别到“时”时是否自动切换钓点
+change_location_on_missing_time = false
+
 location_left_percent = 11
 location_top_percent = 8
 location_right_percent = 28
@@ -401,7 +460,7 @@ backpack_full_top_percent = 20
 backpack_full_right_percent = 65
 backpack_full_bottom_percent = 30
 use_cls = false
-; Leave model paths blank to use RapidOCR package builtin models.
+; 模型路径留空时使用 RapidOCR 包内置模型
 det_model_path =
 cls_model_path =
 rec_model_path =

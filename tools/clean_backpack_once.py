@@ -1,3 +1,5 @@
+"""手动集成测试：连接真实游戏窗口并执行一次完整背包清理。"""
+
 from __future__ import annotations
 
 import ctypes
@@ -17,6 +19,7 @@ GAME_TITLE = "BrownDust II"
 
 
 def main() -> None:
+    """等待用户切回游戏后运行真实操作，不供自动化单元测试调用。"""
     ctypes.windll.user32.SetProcessDPIAware()
 
     region = utils.get_window_region(GAME_TITLE)

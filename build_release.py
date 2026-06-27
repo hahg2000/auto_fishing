@@ -1,3 +1,5 @@
+"""使用 PyInstaller 构建包含 OCR 模型的 Windows 便携发布包。"""
+
 from __future__ import annotations
 
 import argparse
@@ -47,6 +49,7 @@ def has_distribution(package_name: str) -> bool:
 
 
 def gather_copy_metadata_targets() -> list[str]:
+    """收集 RapidOCR/ONNXRuntime 及其已安装依赖的包元数据。"""
     targets: set[str] = set()
     for package_name in ("rapidocr", "onnxruntime"):
         if has_distribution(package_name):
@@ -73,6 +76,7 @@ def resolve_configured_path(config_value: str) -> Path:
 
 
 def validate_project_file(path: Path) -> Path:
+    """确认资源存在且位于项目目录中，保证发布包可在其他机器使用。"""
     if not path.is_file():
         raise FileNotFoundError(str(path))
 
@@ -85,6 +89,7 @@ def validate_project_file(path: Path) -> Path:
 
 
 def load_model_files() -> list[Path]:
+    """读取配置中的 OCR 模型文件，并集中报告缺失或外部路径。"""
     if not CONFIG_PATH.exists():
         raise SystemExit(f"config.ini not found: {CONFIG_PATH}")
 
@@ -136,6 +141,7 @@ def add_data_args(cmd: list[str], source_path: Path, destination_root: str) -> N
 
 
 def build_pyinstaller_command(*, include_nvidia: bool, model_files: list[Path]) -> list[str]:
+    """生成 PyInstaller 命令，按需包含 NVIDIA 运行库和 OCR 资源。"""
     cmd = [
         sys.executable,
         "-m",
@@ -155,6 +161,7 @@ def build_pyinstaller_command(*, include_nvidia: bool, model_files: list[Path]) 
         "onnxruntime",
     ]
 
+    # 排除程序未使用的大型 GUI/数据分析包，控制发布包体积。
     cmd.extend([
         "--exclude-module", "tkinter",
         "--exclude-module", "matplotlib",
@@ -185,6 +192,7 @@ def build_pyinstaller_command(*, include_nvidia: bool, model_files: list[Path]) 
 
 
 def zip_dist_folder(package_dir: Path) -> Path:
+    """把 onedir 产物压缩为保留应用根目录的 Windows 发布包。"""
     zip_path = DIST_DIR / f"{APP_NAME}-windows.zip"
     if zip_path.exists():
         zip_path.unlink()

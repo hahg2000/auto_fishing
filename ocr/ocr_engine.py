@@ -1,3 +1,5 @@
+"""为 RapidOCR 提供稳定的数据模型和项目内调用接口。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,11 +10,14 @@ import numpy as np
 
 @dataclass(frozen=True)
 class OCRBox:
+    """OCR 文本框的多边形顶点和检测置信度。"""
+
     points: tuple[tuple[int, int], ...]
     score: float
 
     @property
     def bounds(self) -> tuple[int, int, int, int]:
+        """返回包住所有顶点的轴对齐矩形。"""
         xs = [point[0] for point in self.points]
         ys = [point[1] for point in self.points]
         return min(xs), min(ys), max(xs), max(ys)
@@ -20,6 +25,8 @@ class OCRBox:
 
 @dataclass(frozen=True)
 class OCRText:
+    """识别文本、置信度及可选的来源文本框。"""
+
     text: str
     score: float
     box: OCRBox | None = None
@@ -27,13 +34,15 @@ class OCRText:
 
 @dataclass(frozen=True)
 class _RapidOCRPayload:
+    """把不同 RapidOCR 返回版本归一化后的内部载荷。"""
+
     boxes: list[OCRBox]
     texts: list[str]
     scores: list[float]
 
 
 class RapidOCREngine:
-    """Thin RapidOCR wrapper that keeps the project-side API stable."""
+    """RapidOCR 轻量适配层，使项目不依赖第三方库的具体返回结构。"""
 
     def __init__(
         self,
@@ -67,10 +76,12 @@ class RapidOCREngine:
         self._use_cls = use_cls
 
     def detect(self, image: np.ndarray) -> list[OCRBox]:
+        """只执行文字检测，返回文本框而不识别内容。"""
         payload = self._run(image, use_det=True, use_cls=False, use_rec=False)
         return payload.boxes
 
     def recognize(self, image: np.ndarray) -> OCRText | None:
+        """把整张图作为单个文本区域进行识别。"""
         if image.size == 0:
             return None
 
@@ -86,6 +97,7 @@ class RapidOCREngine:
         return OCRText(text=text, score=score)
 
     def detect_and_recognize(self, image: np.ndarray) -> list[OCRText]:
+        """检测并识别图中所有文本，并按返回索引关联文本框与置信度。"""
         if image.size == 0:
             return []
 
@@ -111,6 +123,7 @@ class RapidOCREngine:
         right: int,
         bottom: int,
     ) -> list[OCRText]:
+        """裁剪指定局部区域后执行完整 OCR。"""
         roi = image[top:bottom, left:right]
         return self.detect_and_recognize(roi)
 
@@ -126,6 +139,7 @@ class RapidOCREngine:
         return self._extract_payload(result)
 
     def _extract_payload(self, result: Any) -> _RapidOCRPayload:
+        """兼容 RapidOCR 直接返回结果或 ``(结果, 耗时)`` 元组的形式。"""
         payload = result[0] if isinstance(result, tuple) else result
         if payload is None:
             return _RapidOCRPayload(boxes=[], texts=[], scores=[])
@@ -158,6 +172,7 @@ class RapidOCREngine:
         return [float(score) for score in self._as_list(raw_scores)]
 
     def _extract_value(self, payload: Any, *keys: str, default: Any) -> Any:
+        """同时兼容字典和对象属性，并尝试不同版本使用的字段名。"""
         if isinstance(payload, dict):
             for key in keys:
                 if key in payload:

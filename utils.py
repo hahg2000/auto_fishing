@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import win32gui
 
+
 @dataclass(frozen=True)
 class Rect:
     left: int
@@ -59,7 +60,7 @@ class DxCameraCapture:
     def __init__(self, output_color: str = "BGR") -> None:
         import dxcam
 
-        self._camera = dxcam.create(output_color=output_color) # type: ignore
+        self._camera = dxcam.create(output_color=output_color)  # type: ignore
 
     def grab(self, region: Rect | tuple[int, int, int, int]) -> np.ndarray | None:
         target = region.as_tuple() if isinstance(region, Rect) else region
@@ -101,7 +102,7 @@ def get_window_region(window_title: str) -> Rect | None:
 def get_resource_path(relative_path: str) -> str:
     """获取资源文件的绝对路径。"""
     if hasattr(sys, "_MEIPASS"):
-        return os.path.join(sys._MEIPASS, relative_path) # type: ignore
+        return os.path.join(sys._MEIPASS, relative_path)  # type: ignore
     return os.path.join(os.path.abspath("."), relative_path)
 
 
@@ -277,7 +278,7 @@ time_bottom_percent = 100
 time_left_percent = 0
 time_right_percent = 18
 
-; 倒计时位置
+; QTE条位置
 qte_top_percent = 50
 qte_bottom_percent = 97
 qte_left_percent = 22
@@ -367,16 +368,16 @@ quit_backpack_top = 0.05
 ; 一轮钓鱼结束后等待的时间，根据网络情况可以调整
 round_end_wait_time = 2
 
-; 钓鱼成功后的停留时间，来等待动画效果结束，根据电脑情况可以调整
+; 钓鱼成功后的停留时间，用于等待动画效果结束
 fish_end_wait_time = 2
 
-; 执行脚本后的停留时间，来预留时间能切换到游戏界面
+; 执行脚本后的停留时间，用于预留切换到游戏界面的时间
 begin_fish_wait_time = 3
 
 ; 热循环的轻量节流时间，减轻 CPU 占用
 loop_sleep_seconds = 0.005
 
-; 钓鱼的最长持续时间，用于防止错误一直退出不了qte时刻
+; 钓鱼的最长持续时间，用于防止错误一直退不出 QTE
 longest_keep_time = 35
 
 [scale]
@@ -385,7 +386,7 @@ reference_window_width = 1152
 reference_window_height = 648
 
 [ocr]
-; Enable OCR to run once after startup for debugging the target text area.
+; 是否启用 OCR
 enabled = true
 debug_once_on_start = true
 auto_select_strategy = true
@@ -398,7 +399,7 @@ backpack_full_top_percent = 20
 backpack_full_right_percent = 65
 backpack_full_bottom_percent = 30
 use_cls = false
-; Leave model paths blank to use RapidOCR package builtin models.
+; 留空时使用 RapidOCR 包内置模型。
 det_model_path =
 cls_model_path =
 rec_model_path =

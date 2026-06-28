@@ -29,4 +29,3 @@ BACKPACK_FULL_MATCH_ALIASES: tuple[str, ...] = (
     "请清理背包",
     "清理背包",
 )
-

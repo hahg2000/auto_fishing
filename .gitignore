@@ -3,3 +3,7 @@ dist/
 build/
 *.spec
 *.pyc
+.build-tools/
+.venv/
+.venv312/
+__pycache__/

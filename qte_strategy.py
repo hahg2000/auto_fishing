@@ -11,6 +11,8 @@ import utils
 from utils import Rect
 
 DEFAULT_LOOP_SLEEP_SECONDS = 0.005
+FINISH_CLICK_REPEAT_COUNT = 5
+FINISH_CLICK_INTERVAL_SECONDS = 0.5
 
 
 class BaseQTEStrategy:
@@ -56,7 +58,7 @@ class BaseQTEStrategy:
             config.getint("roi", "time_top_percent"),
             config.getint("roi", "time_bottom_percent"),
             config.getint("roi", "time_left_percent"),
-            config.getint("roi", "time_right_percent")
+            config.getint("roi", "time_right_percent"),
         )
         self.qte_pos = (
             config.getint("roi", "qte_top_percent"),
@@ -83,18 +85,18 @@ class BaseQTEStrategy:
             return None
         frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         return frame_hsv
-    
+
     def _split_roi_and_time(self, frame_hsv: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         h, w = frame_hsv.shape[:2]
-        roi_hsv = frame_hsv[
+        time_hsv = frame_hsv[
             h * self.time_pos[0] // 100 : h * self.time_pos[1] // 100,
             w * self.time_pos[2] // 100 : w * self.time_pos[3] // 100,
         ]
-        time_hsv = frame_hsv[
+        qte_hsv = frame_hsv[
             h * self.qte_pos[0] // 100 : h * self.qte_pos[1] // 100,
             w * self.qte_pos[2] // 100 : w * self.qte_pos[3] // 100,
         ]
-        return roi_hsv, time_hsv
+        return time_hsv, qte_hsv
 
     def _time_bar_visible(self, time_hsv: np.ndarray) -> bool:
         mask_green = utils.create_color_mask(
@@ -128,8 +130,9 @@ class BaseQTEStrategy:
         time.sleep(self.fish_end_wait_time)
         window_center_x, window_center_y = self.region.center
         pydirectinput.moveTo(window_center_x, window_center_y)
-        time.sleep(0.2)
-        pydirectinput.click()
+        for _ in range(FINISH_CLICK_REPEAT_COUNT):
+            pydirectinput.click()
+            time.sleep(FINISH_CLICK_INTERVAL_SECONDS)
 
     def _yellow_mask(self, roi_hsv: np.ndarray) -> np.ndarray:
         return utils.create_color_mask(self.yellow_range.lower, self.yellow_range.upper, roi_hsv)
@@ -159,7 +162,7 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
             if frames is None:
                 self._sleep_loop()
                 continue
-            
+
             time_hsv, qte_hsv = self._split_roi_and_time(frames)
             if not self._time_bar_visible(time_hsv):
                 no_bar_frames += 1
@@ -169,7 +172,7 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
                 continue
 
             no_bar_frames = 0
-            
+
             if self.solve_ice_trouble(qte_hsv):
                 print(">>> 破冰成功，继续钓鱼")
                 self._sleep_loop()
@@ -181,11 +184,10 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
                 continue
 
             mask_yellow = self._yellow_mask(qte_hsv)
-            
+
             check_y = mask_yellow.shape[0] // 2
             if mask_yellow[check_y, cursor_x]:
                 pydirectinput.press("space")
-                pass
             self._sleep_loop()
 
     def solve_ice_trouble(self, roi_hsv: np.ndarray) -> bool:

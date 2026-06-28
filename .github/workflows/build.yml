@@ -1,6 +1,8 @@
 name: Build Release Package
 
 on:
+  push:
+    branches: [dev_dxcam_sync]
   release:
     types: [published]
   workflow_dispatch:

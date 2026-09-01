@@ -12,7 +12,7 @@ import pydirectinput
 import utils
 from utils import Rect
 
-DEFAULT_LOOP_SLEEP_SECONDS = 0.005
+DEFAULT_LOOP_SLEEP_SECONDS = 0.02
 
 
 class BaseQTEStrategy:
@@ -28,10 +28,9 @@ class BaseQTEStrategy:
             "loop_sleep_seconds",
             fallback=DEFAULT_LOOP_SLEEP_SECONDS,
         )
-        self.press_offset_pixels = config.getint(
-            "roi",
-            "qte_press_offset_pixels",
-            fallback=0,
+        self.press_tolerance_pixels = utils.scale_pixel_length(
+            config.getint("roi", "qte_press_tolerance_pixels", fallback=4),
+            self.pixel_threshold_scale.width_factor,
         )
         self.time_bar_score_threshold = utils.scale_pixel_threshold(
             50,
@@ -78,7 +77,7 @@ class BaseQTEStrategy:
             f"time_bar_score={self.time_bar_score_threshold}, "
             f"ice_trouble={self.ice_trouble_pixel_threshold}, "
             f"abyss_yellow={self.abyss_yellow_pixel_threshold}, "
-            f"press_offset={self.press_offset_pixels}px"
+            f"press_tolerance={self.press_tolerance_pixels}px"
         )
 
     def play_qte(self, sct: utils.DxCameraCapture) -> None:
@@ -155,14 +154,11 @@ class BaseQTEStrategy:
             return None
         return int(np.argmax(col_sums))
 
-    def _get_press_check_x(self, cursor_x: int, mask_width: int) -> int:
-        """应用按键时机偏移，并把判定点限制在遮罩宽度内。"""
-        offset_x = cursor_x + self.press_offset_pixels
-        return max(0, min(offset_x, mask_width - 1))
-
     def _mask_column_has_color(self, mask: np.ndarray, x: int) -> bool:
-        """检查整列而非单个像素，容忍光标与色条在纵向上的轻微错位。"""
-        return cv2.countNonZero(mask[:, x : x + 1]) > 0
+        """检查整列及其左右容差窗口内是否有颜色，容忍光标在采样间隔内跨越色条。"""
+        left = max(0, x - self.press_tolerance_pixels)
+        right = min(mask.shape[1], x + self.press_tolerance_pixels + 1)
+        return cv2.countNonZero(mask[:, left:right]) > 0
 
     def _finish_fishing(self) -> None:
         time.sleep(self.fish_end_wait_time)
@@ -193,6 +189,8 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
     def play_qte(self, sct: utils.DxCameraCapture) -> None:
         print(">>> 开始 QTE...")
         no_bar_frames = 0
+        qte_started = False
+        loading_logged = False
         start_time = time.monotonic()
 
         while time.monotonic() - start_time < self.longest_keep_time:
@@ -204,12 +202,19 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
             time_hsv, qte_hsv = self._split_roi_and_time(frames)
             time_green_mask, time_red_mask = self._time_bar_masks(time_hsv)
             if not self._time_bar_visible_from_masks(time_green_mask, time_red_mask):
+                if not qte_started:
+                    if not loading_logged:
+                        print(">>> 倒计时条尚未出现，等待 QTE 界面加载")
+                        loading_logged = True
+                    self._sleep_loop()
+                    continue
                 no_bar_frames += 1
                 if self._on_bar_disappeared(no_bar_frames):
                     break
                 self._sleep_loop()
                 continue
 
+            qte_started = True
             no_bar_frames = 0
             
             if self.solve_ice_trouble(qte_hsv):
@@ -225,7 +230,7 @@ class FrostStraitQTEStrategy(BaseQTEStrategy):
             if cursor_x is None:
                 pydirectinput.press("space")
             else:
-                check_x = self._get_press_check_x(cursor_x, mask_yellow.shape[1])
+                check_x = cursor_x
             if check_x is not None and self._mask_column_has_color(mask_yellow, check_x):
                 pydirectinput.press("space")
             self._sleep_loop()
@@ -278,6 +283,8 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
         """黄色存在时优先命中黄色，否则在蓝色区域按键刷新下一轮。"""
         print(">>> 开始 QTE...")
         no_bar_frames = 0
+        qte_started = False
+        loading_logged = False
         start_time = time.monotonic()
 
         while time.monotonic() - start_time < self.longest_keep_time:
@@ -290,12 +297,19 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
 
             time_green_mask, time_red_mask = self._time_bar_masks(time_hsv)
             if not self._time_bar_visible_from_masks(time_green_mask, time_red_mask):
+                if not qte_started:
+                    if not loading_logged:
+                        print(">>> 倒计时条尚未出现，等待 QTE 界面加载")
+                        loading_logged = True
+                    self._sleep_loop()
+                    continue
                 no_bar_frames += 1
                 if self._on_bar_disappeared(no_bar_frames):
                     break
                 self._sleep_loop()
                 continue
 
+            qte_started = True
             no_bar_frames = 0
             cursor_mask = self._cursor_mask(qte_hsv)
             cursor_x = self._find_cursor_x_from_mask(cursor_mask)
@@ -316,7 +330,7 @@ class AbyssMawQTEStrategy(BaseQTEStrategy):
                 yellow_mask.shape[1],
             )
             check_x = self._clamp_x_to_range(
-                self._get_press_check_x(cursor_x, yellow_mask.shape[1]),
+                cursor_x,
                 left_x,
                 right_x,
             )

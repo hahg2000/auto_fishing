@@ -205,6 +205,16 @@ def zip_dist_folder(package_dir: Path) -> Path:
     return zip_path
 
 
+def remove_unused_opencv_ffmpeg_binaries(package_dir: Path) -> list[Path]:
+    """删除项目未使用的 OpenCV 视频编解码 DLL，并返回已删除路径。"""
+    removed_paths: list[Path] = []
+    for ffmpeg_dll in package_dir.rglob("opencv_videoio_ffmpeg*.dll"):
+        print(f">>> Removing unused OpenCV FFmpeg DLL: {ffmpeg_dll}")
+        ffmpeg_dll.unlink()
+        removed_paths.append(ffmpeg_dll)
+    return removed_paths
+
+
 def main() -> None:
     args = parse_args()
 
@@ -228,6 +238,7 @@ def main() -> None:
     if not package_dir.is_dir():
         raise SystemExit(f"PyInstaller output directory not found: {package_dir}")
 
+    remove_unused_opencv_ffmpeg_binaries(package_dir)
     zip_path = zip_dist_folder(package_dir)
     print(f">>> Build output directory: {package_dir}")
     print(f">>> Release zip: {zip_path}")

@@ -42,6 +42,10 @@ The local output will be:
 - `dist/BD2_AutoFishing/`
 - `dist/BD2_AutoFishing-windows.zip`
 
+After PyInstaller finishes, the build script removes OpenCV's FFmpeg video DLL
+because this project does not use `cv2.VideoCapture` or `cv2.VideoWriter`.
+If video input or output is added later, remove this cleanup step first.
+
 ## 4. Test locally
 
 Run:

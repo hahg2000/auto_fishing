@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import configparser
 import ctypes
+import logging
 import time
 from typing import Type
 
@@ -21,9 +22,11 @@ from utils import DxCameraCapture, Rect
 # 让 Windows 返回真实像素坐标，避免系统缩放导致截图区域和点击位置错位。
 ctypes.windll.user32.SetProcessDPIAware()
 GAME_TITLE = "BrownDust II"
-BITE_PIXEL_THRESHOLD = 250
+BITE_PIXEL_THRESHOLD = 220
 BITE_TIMEOUT_SECONDS = 15
 DEFAULT_LOOP_SLEEP_SECONDS = 0.02
+
+log = logging.getLogger(__name__)
 
 QTE_STRATEGIES_MAP: dict[FishingLocation, Type[strategy.BaseQTEStrategy]] = {
     FishingLocation.YANBO_LAKE: strategy.FrostStraitQTEStrategy,
@@ -92,13 +95,20 @@ class FishingBot:
         print(">>> 等待鱼上钩")
         wait_start_time = time.monotonic()
         fail_num = 0
+        max_yellow_pixel = 0
 
         while True:
             now = time.monotonic()
             if now - wait_start_time > BITE_TIMEOUT_SECONDS:
+                log.warning(
+                    ">>> 突发情况，尝试恢复钓鱼状态 (本窗口峰值黄色像素=%d，阈值=%d)",
+                    max_yellow_pixel,
+                    self.bite_pixel_threshold,
+                )
                 print(">>> 突发情况，尝试恢复钓鱼状态")
                 fail_num += 1
                 wait_start_time = now
+                max_yellow_pixel = 0
                 operate.recover_from_timeout(self.region)
 
             # 背包已满提示只会在抛竿后的短时间出现，无需整轮持续运行 OCR。
@@ -119,11 +129,19 @@ class FishingBot:
                 hook_hsv,
                 is_dilate=False,
             )
+
             hook_yellow_pixel = cv2.countNonZero(hook_yellow)
+            if hook_yellow_pixel > max_yellow_pixel:
+                max_yellow_pixel = hook_yellow_pixel
             bite_detected = hook_yellow_pixel > self.bite_pixel_threshold
 
             if bite_detected:
                 print(">>> 鱼上钩了！")
+                log.info(
+                    ">>> 鱼上钩，黄色像素=%d (阈值=%d)",
+                    hook_yellow_pixel,
+                    self.bite_pixel_threshold,
+                )
                 pydirectinput.press("space")
                 return 
             self._sleep_loop()
@@ -170,6 +188,7 @@ class FishingBot:
         """持续执行换点检查、抛竿、上钩检测和 QTE。"""
         with DxCameraCapture(output_color="BGR") as sct:
             qte_strategy = self.choose_strategy(sct)
+            log.info(">>> 使用策略: %s", type(qte_strategy).__name__)
             time.sleep(self.begin_fish_wait_time)
             while True:
                 if self.should_change_location(sct):
@@ -184,10 +203,16 @@ class FishingBot:
 
 def main() -> None:
     """定位游戏客户区并创建运行所需的配置与 OCR 上下文。"""
+    utils.setup_logging()
+    utils.install_exception_hook()
+    log.info(">>> 程序启动")
+
     region = utils.get_window_region(GAME_TITLE)
     if not region:
+        log.error(">>> 未找到标题为 '%s' 的窗口", GAME_TITLE)
         input(">>> 程序结束，按回车键关闭")
         raise SystemExit(1)
+    log.info(">>> 已定位游戏窗口: %s", region.as_tuple())
 
     config = utils.read_ini()
     

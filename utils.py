@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import configparser
+import logging
 import os
 import sys
+from logging.handlers import RotatingFileHandler
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -125,14 +127,16 @@ def get_resource_path(relative_path: str) -> str:
     return os.path.join(os.path.abspath("."), relative_path)
 
 
+def get_base_path() -> str:
+    """返回运行时文件（配置、日志等）应存放的目录。"""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 def read_ini(filename: str = "config.ini") -> configparser.ConfigParser:
     """读取 ini 配置文件，不存在时自动写入默认配置。"""
-    if getattr(sys, "frozen", False):
-        base_path = os.path.dirname(sys.executable)
-    else:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-
-    full_path = os.path.join(base_path, filename)
+    full_path = os.path.join(get_base_path(), filename)
     print(f">>> 正在读取配置文件路径: {full_path}")
 
     config = configparser.ConfigParser()
@@ -143,6 +147,63 @@ def read_ini(filename: str = "config.ini") -> configparser.ConfigParser:
 
     config.read(full_path, encoding="utf-8-sig")
     return config
+
+
+def setup_logging() -> None:
+    """初始化日志，写入程序目录下的日志文件并输出到控制台。"""
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        return
+    root_logger.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+    file_handler = RotatingFileHandler(
+        os.path.join(get_base_path(), "auto_fishing.log"),
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    # 原生崩溃（如 onnxruntime / dxcam 段错误）时把 Python 调用栈转储到文件。
+    try:
+        import faulthandler
+
+        fault_file = open(
+            os.path.join(get_base_path(), "auto_fishing.fault.log"),
+            "w",
+            encoding="utf-8",
+        )
+        faulthandler.enable(file=fault_file)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("faulthandler 初始化失败: %s", exc)
+
+
+def install_exception_hook() -> None:
+    """捕获未处理异常写入日志，并在打包环境下保持控制台窗口不立即关闭。"""
+    logger = logging.getLogger(__name__)
+
+    def handle_uncaught(exc_type, exc_value, exc_tb) -> None:
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        logger.critical("未捕获的异常", exc_info=(exc_type, exc_value, exc_tb))
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+        if getattr(sys, "frozen", False):
+            try:
+                input(">>> 程序异常退出，详细信息已写入 auto_fishing.log，按回车键关闭")
+            except Exception:
+                pass
+
+    sys.excepthook = handle_uncaught
 
 
 def read_config_int(config: configparser.ConfigParser, section: str, key: str) -> int:
@@ -294,7 +355,7 @@ def create_color_mask(
 DEFAULT_CONFIG_CONTENT = """[hook]
 ; 感叹号位置
 top_percent = 25
-bottom_percent = 36
+bottom_percent = 37
 left_percent = 49
 right_percent = 51
 
@@ -324,8 +385,8 @@ qte_bottom_percent = 97
 qte_left_percent = 22
 qte_right_percent = 100
 
-; QTE 按键判定横向偏移（像素），正数向右、负数向左；是否提前取决于光标移动方向
-qte_press_offset_pixels = 0
+; QTE 按键判定横向容差（参考分辨率像素），补偿高分辨率下光标在采样间隔内跨越色条
+qte_press_tolerance_pixels = 4
 
 ; 倒计时绿色颜色区间
 time_lower_green_hue = 65

@@ -103,7 +103,6 @@ python -m unittest discover -s tests
 | `qte_bottom_percent` | `97` | QTE 条下边界 | 相对 QTE 整体截图区域 |
 | `qte_left_percent` | `22` | QTE 条左边界 | 相对 QTE 整体截图区域 |
 | `qte_right_percent` | `100` | QTE 条右边界 | 相对 QTE 整体截图区域 |
-| `qte_press_offset_pixels` | `0` | QTE 按键判定横向偏移 | 正数向右、负数向左；是否提前取决于光标移动方向，结果会限制在遮罩宽度内 |
 | `time_lower_green_hue` | `65` | 倒计时绿色色相下限 |  |
 | `time_lower_green_saturation` | `185` | 倒计时绿色饱和度下限 |  |
 | `time_lower_green_value` | `210` | 倒计时绿色明度下限 |  |
@@ -294,7 +293,6 @@ python -m unittest discover -s tests
 | `qte_bottom_percent` | `97` | QTE 条下边界 | 相对 QTE 整体截图区域 |
 | `qte_left_percent` | `22` | QTE 条左边界 | 相对 QTE 整体截图区域 |
 | `qte_right_percent` | `100` | QTE 条右边界 | 相对 QTE 整体截图区域 |
-| `qte_press_offset_pixels` | `0` | QTE 按键判定横向偏移 | 正数向右、负数向左；是否提前取决于光标移动方向，结果会限制在遮罩宽度内 |
 | `time_lower_green_hue` | `65` | 倒计时绿色色相下限 |  |
 | `time_lower_green_saturation` | `185` | 倒计时绿色饱和度下限 |  |
 | `time_lower_green_value` | `210` | 倒计时绿色明度下限 |  |

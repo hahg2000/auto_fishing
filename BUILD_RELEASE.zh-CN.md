@@ -40,6 +40,9 @@ python build_release.py --nvidia
 - `dist/BD2_AutoFishing/`
 - `dist/BD2_AutoFishing-windows.zip`
 
+PyInstaller 完成后，构建脚本会自动删除 OpenCV 的 FFmpeg 视频 DLL，因为本项目没有使用
+`cv2.VideoCapture` 或 `cv2.VideoWriter`。如果以后增加视频输入或输出功能，需要先移除该清理步骤。
+
 ## 4. 本地测试
 
 运行：

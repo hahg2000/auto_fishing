@@ -13,6 +13,8 @@
 
 如果你之后想切换为自己准备的、兼容 RapidOCR 的 ONNX 模型，请在 `[ocr]` 段中填写这些路径。
 
+注意：自定义模型文件必须放在项目目录内（不能使用项目外的绝对路径），否则构建脚本会报错中止，以保证发布包在其他机器上也能正常使用。
+
 ## 2. 安装构建环境
 
 安装构建环境：
@@ -59,16 +61,16 @@ PyInstaller 完成后，构建脚本会自动删除 OpenCV 的 FFmpeg 视频 DLL
 
 ## 5. 发布到 GitHub
 
-推送提交后，创建并发布一个 GitHub Release。
+推送提交后，创建并发布一个 GitHub Release（工作流在 Release 发布时自动触发）。也可以不发布 Release，直接在 GitHub 的 Actions 页面手动触发该工作流。
 
 注意：
 
 - GitHub Actions 会自动打包 `rapidocr` 的内置模型数据
 - 如果你之后切换回自己本地的模型文件，这些文件也必须存在于仓库检出内容中
 
-工作流会自动执行以下步骤：
+工作流（`.github/workflows/build.yml`）在 Windows + Python 3.12.4 环境下自动执行以下步骤：
 
-- 安装 RapidOCR、ONNXRuntime 和 PyInstaller
+- 安装 `requirements.txt` 中的依赖和 PyInstaller
 - 运行 `python build_release.py`
-- 上传 `dist/BD2_AutoFishing-windows.zip`
-- 将该 zip 附加到 GitHub Release
+- 上传 `dist/BD2_AutoFishing-windows.zip` 作为构建产物
+- 发布 Release 时将该 zip 附加到 Release

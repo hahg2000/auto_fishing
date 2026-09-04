@@ -6,3 +6,11 @@ build/
 *.pyc
 tests/
 auto_fishing/
+desktop/node_modules/
+desktop/.vite/
+desktop/src/renderer/.vite/
+desktop/out/
+desktop/resources/python/
+.pnpm-store/
+desktop/
+auto_fishing*.log

@@ -386,7 +386,7 @@ qte_left_percent = 22
 qte_right_percent = 100
 
 ; QTE 按键判定横向容差（参考分辨率像素），补偿高分辨率下光标在采样间隔内跨越色条
-qte_press_tolerance_pixels = 4
+qte_press_tolerance_pixels = 0
 
 ; 倒计时绿色颜色区间
 time_lower_green_hue = 65

@@ -24,7 +24,7 @@ ctypes.windll.user32.SetProcessDPIAware()
 GAME_TITLE = "BrownDust II"
 BITE_PIXEL_THRESHOLD = 220
 BITE_TIMEOUT_SECONDS = 15
-DEFAULT_LOOP_SLEEP_SECONDS = 0.02
+DEFAULT_LOOP_SLEEP_SECONDS = 0.01
 
 log = logging.getLogger(__name__)
 

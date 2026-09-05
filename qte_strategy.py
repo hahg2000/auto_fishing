@@ -12,7 +12,7 @@ import pydirectinput
 import utils
 from utils import Rect
 
-DEFAULT_LOOP_SLEEP_SECONDS = 0.02
+DEFAULT_LOOP_SLEEP_SECONDS = 0.01
 
 
 class BaseQTEStrategy:
@@ -168,7 +168,22 @@ class BaseQTEStrategy:
         pydirectinput.click()
 
     def _yellow_mask(self, roi_hsv: np.ndarray) -> np.ndarray:
-        return utils.create_color_mask(self.yellow_range.lower, self.yellow_range.upper, roi_hsv)
+        # 膨胀核随窗口宽度缩放：光标宽度随分辨率变大，核跟着变大才能填掉光标压住黄条挖出的洞。
+        kernel_size = utils.scale_pixel_length(
+            7,
+            self.pixel_threshold_scale.width_factor,
+            minimum=3,
+        )
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        return utils.create_color_mask(
+            self.yellow_range.lower,
+            self.yellow_range.upper,
+            roi_hsv,
+            is_dilate=True,
+            dilate_kernel_size=(kernel_size, kernel_size),
+            dilate_iterations=2,
+        )
 
     def _on_bar_disappeared(self, no_bar_frames: int) -> bool:
         """连续多帧看不到倒计时条时确认本轮结束，避免单帧闪烁误判。"""

@@ -215,6 +215,24 @@ def remove_unused_opencv_ffmpeg_binaries(package_dir: Path) -> list[Path]:
     return removed_paths
 
 
+def remove_unused_pillow_plugins(package_dir: Path) -> list[Path]:
+    """删除项目未使用的 Pillow 可选图像格式插件，减小打包体积。"""
+    plugin_patterns = (
+        "_avif*.pyd",        # AVIF 解码器
+        "_webp*.pyd",        # WebP 解码器
+        "_imagingft*.pyd",   # FreeType 字体渲染
+        "_imagingcms*.pyd",  # ICC 色彩管理
+        "_imagingtk*.pyd",   # Tkinter 集成
+    )
+    removed_paths: list[Path] = []
+    for pattern in plugin_patterns:
+        for plugin in package_dir.rglob(pattern):
+            print(f">>> Removing unused Pillow plugin: {plugin}")
+            plugin.unlink()
+            removed_paths.append(plugin)
+    return removed_paths
+
+
 def main() -> None:
     args = parse_args()
 
@@ -239,6 +257,7 @@ def main() -> None:
         raise SystemExit(f"PyInstaller output directory not found: {package_dir}")
 
     remove_unused_opencv_ffmpeg_binaries(package_dir)
+    remove_unused_pillow_plugins(package_dir)
     zip_path = zip_dist_folder(package_dir)
     print(f">>> Build output directory: {package_dir}")
     print(f">>> Release zip: {zip_path}")
